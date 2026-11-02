@@ -37,19 +37,28 @@ XON/XOFF is on by default: if the PicoCalc falls behind (it has a 16 KB buffer),
 
 ## Trying it with Linux
 
-Plug the PicoCalc's USB-C into the Linux machine. The CH340 shows up as `/dev/ttyUSB0` (`dmesg | tail` says for certain).
+Plug the PicoCalc's USB-C into the Linux machine. The CH340 shows up as `/dev/ttyUSB0` (`dmesg | tail` says for certain). On Ubuntu and its relatives, if the port vanishes a moment after it appears, the braille-display service has taken it: `sudo apt remove brltty`.
 
 A quick test, typing at each end:
 
     picocom -b 115200 /dev/ttyUSB0          # Ctrl-A Ctrl-X to leave
 
-A login on the PicoCalc:
+A login on the PicoCalc. The PicoCalc doesn't drive the line's carrier-detect signal, so agetty has to be told it's a local line (`-L`), or it waits for a carrier that never comes. Once, to set that up:
 
-    sudo systemctl start serial-getty@ttyUSB0.service
+    sudo systemctl edit serial-getty@ttyUSB0.service
 
-Then press Enter on the PicoCalc for the login prompt. After logging in, tell Linux what it's talking to:
+and put in
 
-    export TERM=vt100
+    [Service]
+    ExecStart=
+    ExecStart=-/sbin/agetty -L -o '-p -- \\u' 115200 %I vt100
+
+(the empty `ExecStart=` clears the original). Then
+
+    sudo systemctl restart serial-getty@ttyUSB0.service
+
+and press Enter on the PicoCalc for the login prompt. After logging in:
+
     stty rows 32 cols 64
 
 (`resize`, from the xterm package, finds the size by asking the terminal.) Then `vim`, `less`, `htop`, `top` and `vttest 32x64` are good tests. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
