@@ -1,0 +1,4 @@
+build/
+host/test_vt
+host/ptyrun
+host/screentest
