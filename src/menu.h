@@ -1,4 +1,4 @@
-/* menu.h -- F5's setup menu, over the terminal. */
+/* menu.h -- the setup menu (Alt+F5), over the terminal. */
 #ifndef MENU_H
 #define MENU_H
 

@@ -469,6 +469,14 @@ static void csi_dispatch(vt *t, uint8_t f)
 		clear_cells(t, t->y, t->x, t->x + n > VT_COLS ? VT_COLS : t->x + n);
 		t->wrapnext = false;
 		break;
+	case 'Z':				/* CBT: back n tab stops */
+		for (int i = 0; i < n && t->x > 0; i++) {
+			int x = t->x - 1;
+			while (x > 0 && !t->tabs[x]) x--;
+			t->x = x;
+		}
+		t->wrapnext = false;
+		break;
 	case 'S': scroll_up(t, t->top, t->bot, n); break;
 	case 'T': scroll_down(t, t->top, t->bot, n); break;
 	case 'c':
@@ -744,6 +752,12 @@ void vt_key(vt *t, int key)
 		case VK_DEL: send(t, "\x1b[3~"); return;
 		case VK_PGUP: send(t, "\x1b[5~"); return;
 		case VK_PGDN: send(t, "\x1b[6~"); return;
+		case VK_F5: send(t, "\x1b[15~"); return;	/* (as xterm and the VT220) */
+		case VK_F6: send(t, "\x1b[17~"); return;
+		case VK_F7: send(t, "\x1b[18~"); return;
+		case VK_F8: send(t, "\x1b[19~"); return;
+		case VK_F9: send(t, "\x1b[20~"); return;
+		case VK_F10: send(t, "\x1b[21~"); return;
 		}
 	}
 	switch (key) {

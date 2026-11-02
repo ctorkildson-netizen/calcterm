@@ -100,7 +100,8 @@ enum {
 	VK_UP = 0x100, VK_DOWN, VK_RIGHT, VK_LEFT,
 	VK_ENTER, VK_BS, VK_TAB, VK_ESC,
 	VK_HOME, VK_END, VK_INS, VK_DEL, VK_PGUP, VK_PGDN,
-	VK_PF1, VK_PF2, VK_PF3, VK_PF4,
+	VK_PF1, VK_PF2, VK_PF3, VK_PF4,		/* F1-F4 */
+	VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, VK_F10,
 };
 void vt_key(vt *t, int key);
 void vt_key_char(vt *t, uint8_t c, bool alt);	/* Alt: ESC first, as xterm's meta */

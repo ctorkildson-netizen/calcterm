@@ -15,16 +15,16 @@ The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100'
 
 | Key | Sends |
 | --- | --- |
-| F1–F4 | PF1–PF4 |
+| F1–F10 | function keys: F1–F4 as the VT100's PF1–PF4, F5–F10 as xterm's (Shift+F1–F5 gives F6–F10) |
 | Arrows | cursor keys (application mode when the host asks) |
 | Home, End, Ins, Del, PgUp, PgDn | the xterm sequences |
 | Backspace | DEL (`^?`), or BS — see the setup menu |
 | Alt + key | Esc then the key (meta) |
 | Ctrl tapped on its own | makes the next key a Ctrl key (a `^` shows in the top-right corner) |
 | Brk | a quarter-second break on the line |
-| **F5** | **the setup menu** |
+| **Alt+F5** | **the setup menu** |
 
-## The setup menu (F5)
+## The setup menu (Alt+F5)
 
 Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Changes take effect at once. *Save these settings* writes them to `/calcterm.cfg` on the card, a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and goes back to the shell.
 
@@ -43,7 +43,17 @@ A quick test, typing at each end:
 
     picocom -b 115200 /dev/ttyUSB0          # Ctrl-A Ctrl-X to leave
 
-A login on the PicoCalc. The PicoCalc doesn't drive the line's carrier-detect signal, so agetty has to be told it's a local line (`-L`), or it waits for a carrier that never comes. Once, to set that up:
+### The terminfo entry
+
+`calcterm.ti` tells Linux programs exactly what calcterm can do: its size, colours, line drawing and keys. Copy it to the host and install it once:
+
+    sudo tic -x calcterm.ti
+
+Then `TERM=calcterm` gives colour, line drawing and working function keys in `htop`, `mc`, `vim` and the rest, with nothing borrowed from vt100 or xterm.
+
+### A login on the PicoCalc
+
+The PicoCalc doesn't drive the line's carrier-detect signal, so agetty has to be told it's a local line (`-L`), or it waits for a carrier that never comes. Once, to set that up:
 
     sudo systemctl edit serial-getty@ttyUSB0.service
 
@@ -51,9 +61,9 @@ and put in
 
     [Service]
     ExecStart=
-    ExecStart=-/sbin/agetty -L -o '-p -- \\u' 115200 %I vt100
+    ExecStart=-/sbin/agetty -L -o '-p -- \\u' 115200 %I calcterm
 
-(the empty `ExecStart=` clears the original). Then
+(the empty `ExecStart=` clears the original; use `vt100` in place of `calcterm` if the entry isn't installed). Then
 
     sudo systemctl restart serial-getty@ttyUSB0.service
 
@@ -61,7 +71,20 @@ and press Enter on the PicoCalc for the login prompt. After logging in:
 
     stty rows 32 cols 64
 
-(`resize`, from the xterm package, finds the size by asking the terminal.) Then `vim`, `less`, `htop`, `top` and `vttest 32x64` are good tests. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
+(`resize`, from the xterm package, finds the size by asking the terminal.) If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
+
+### Midnight Commander
+
+Typing long shell commands on the PicoCalc's keyboard is a chore. [Midnight Commander](https://midnight-commander.org/) (`mc`) is a full-screen file manager in the style of Norton Commander: two directory panels, the arrow keys to move, Enter to open or run, and the function keys along the bottom to view, edit, copy, move, make folders and delete. It fits calcterm well, and makes the PicoCalc a comfortable way to look after another machine:
+
+    sudo apt install mc
+    mc
+
+Its command line is still there at the bottom for when you need it, and F10 leaves it.
+
+### Other tests
+
+`vim`, `less`, `htop`, `top` and `vttest 32x64` are good ones.
 
 ## Building
 

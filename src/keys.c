@@ -54,7 +54,12 @@ static int translate(uint8_t c)
 	case KEY_F2: return VK_PF2;
 	case KEY_F3: return VK_PF3;
 	case KEY_F4: return VK_PF4;
-	case KEY_F5: return K_MENU;
+	case KEY_F5: return m_alt ? K_MENU : VK_F5;	/* Alt+F5: the setup menu */
+	case KEY_F6: return VK_F6;
+	case KEY_F7: return VK_F7;
+	case KEY_F8: return VK_F8;
+	case KEY_F9: return VK_F9;
+	case KEY_F10: return VK_F10;
 	case KEY_BREAK: return K_BRK;
 	}
 	if (c < 0x20 || c >= 0x7F) return -1;
@@ -104,7 +109,7 @@ void keys_poll(void)
 			int k = translate(code);
 			sticky = false;			/* used, or cancelled by another key */
 			if (k < 0) continue;
-			if (m_alt) k |= KF_ALT;
+			if (m_alt && k != K_MENU) k |= KF_ALT;
 			kq_put(k);
 			held = code;
 			held_key = k;

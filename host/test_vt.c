@@ -131,6 +131,9 @@ int main(void)
 	IS("tab 1", t.cell[0][8].ch, 'A'); IS("tab 2", t.cell[0][16].ch, 'B');
 	feed("\x1b[3g\r\x1b[5C\x1bH\r\tC");
 	IS("set tab", t.cell[0][5].ch, 'C');
+	fresh();
+	feed("\x1b[1;20H\x1b[ZA\x1b[2ZB");
+	IS("back tab", t.cell[0][16].ch, 'A'); IS("back two tabs", t.cell[0][8].ch, 'B');
 
 	/* attributes and colours */
 	fresh();
@@ -184,6 +187,8 @@ int main(void)
 	vt_key(&t, VK_ENTER); SAID("\r");
 	vt_key(&t, VK_BS); SAID("\x7f");
 	vt_key(&t, VK_PGDN); SAID("\x1b[6~");
+	vt_key(&t, VK_F5); SAID("\x1b[15~");
+	vt_key(&t, VK_F10); SAID("\x1b[21~");
 	vt_key_char(&t, 'x', true); SAID("\x1bx");
 	feed("\x1b[20h"); vt_key(&t, VK_ENTER); SAID("\r\n");
 

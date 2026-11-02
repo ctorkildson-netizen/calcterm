@@ -1,4 +1,4 @@
-/* menu.c -- F5's setup menu, drawn over the terminal.
+/* menu.c -- the setup menu (Alt+F5), drawn over the terminal.
  *
  * Up and Down choose, Left and Right (or Space) change a setting, Enter
  * does an action, Esc or F5 closes it.  A change takes effect at once; Save
@@ -138,7 +138,7 @@ void menu_run(vt *t)
 		int k = keys_get();
 		if (k < 0) { sleep_ms(5); continue; }
 		k &= ~KF_ALT;
-		if (k == VK_ESC || k == K_MENU) break;
+		if (k == VK_ESC || k == K_MENU || k == VK_F5) break;
 		if (k == VK_UP) sel = (sel + I_COUNT - 1) % I_COUNT;
 		else if (k == VK_DOWN || k == VK_TAB) sel = (sel + 1) % I_COUNT;
 		else if (k == VK_LEFT) change(t, sel, -1);

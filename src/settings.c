@@ -57,7 +57,7 @@ bool settings_save(const char **why)
 {
 	char text[512];
 	int n = snprintf(text, sizeof text,
-		"# calcterm settings (the F5 menu writes this file)\n"
+		"# calcterm settings (the setup menu writes this file)\n"
 		"port=%s\nspeed=%lu\nformat=%d%c%d\nxonxoff=%s\necho=%s\nnewline=%s\nbackspace=%s\n",
 		cfg.link.port == PORT_GP45 ? "gp4-gp5" : "usb-c",
 		(unsigned long)cfg.link.baud,
