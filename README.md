@@ -67,7 +67,7 @@ and press Enter on the PicoCalc for the login prompt. After logging in:
 
 With the Pico SDK (2.2.0) and `arm-none-eabi-gcc`:
 
-    git clone --recurse-submodules https://github.com/<you>/calcterm
+    git clone --recurse-submodules https://github.com/ctorkildson-netizen/calcterm
     cd calcterm
     cmake -B build -G Ninja -DPICO_SDK_PATH=/path/to/pico-sdk
     ninja -C build                 # build/calcterm.uf2
