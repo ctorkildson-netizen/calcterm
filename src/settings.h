@@ -1,4 +1,4 @@
-/* settings.h -- what the setup menu changes, kept on the card in /comms.cfg. */
+/* settings.h -- what the setup menu changes, kept on the card in /calcterm.cfg. */
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
@@ -14,7 +14,7 @@ typedef struct {
 
 extern settings cfg;
 
-#define CFG_PATH "/comms.cfg"
+#define CFG_PATH "/calcterm.cfg"
 
 void settings_defaults(void);
 bool settings_load(void);			/* false: none on the card (the defaults stand) */

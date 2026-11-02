@@ -105,7 +105,7 @@ static void draw(int sel)
 {
 	char line[BOX_W + 1], b[16];
 	screen_fill(BOX_X, BOX_Y, BOX_W, I_COUNT + 7, BG);
-	screen_text(BOX_X + 2, BOX_Y + 1, "comms " PICO_PROGRAM_VERSION_STRING " -- setup", 11, BG);
+	screen_text(BOX_X + 2, BOX_Y + 1, "calcterm " PICO_PROGRAM_VERSION_STRING " -- setup", 11, BG);
 	int row = BOX_Y + 3;
 	for (int i = 0; i < I_COUNT; i++) {
 		if (i == I_BREAK) row++;

@@ -1,4 +1,4 @@
-/* settings.c -- the settings, as lines of name=value in /comms.cfg, so the
+/* settings.c -- the settings, as lines of name=value in /calcterm.cfg, so the
  * file can be read and changed by hand (unknown names are skipped). */
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +57,7 @@ bool settings_save(const char **why)
 {
 	char text[512];
 	int n = snprintf(text, sizeof text,
-		"# comms settings (the F5 menu writes this file)\n"
+		"# calcterm settings (the F5 menu writes this file)\n"
 		"port=%s\nspeed=%lu\nformat=%d%c%d\nxonxoff=%s\necho=%s\nnewline=%s\nbackspace=%s\n",
 		cfg.link.port == PORT_GP45 ? "gp4-gp5" : "usb-c",
 		(unsigned long)cfg.link.baud,
