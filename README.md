@@ -68,9 +68,15 @@ and put in
 
     sudo systemctl restart serial-getty@ttyUSB0.service
 
-and press Enter on the PicoCalc for the login prompt. After logging in:
+and press Enter on the PicoCalc for the login prompt. After logging in, type this on the PicoCalc (it sets the size of the PicoCalc's own line; typed in a terminal on the Linux machine's screen it changes that one instead):
 
     stty rows 32 cols 64
+
+To have it done at every login on that line, add this to `~/.bashrc` on the Linux machine:
+
+    [ "$(tty)" = /dev/ttyUSB0 ] && stty rows 32 cols 64
+
+If Midnight Commander's top line scrolls off the screen, or its key bar wraps, this is what's missing.
 
 (`resize`, from the xterm package, finds the size by asking the terminal.) If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
 
