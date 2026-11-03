@@ -17,7 +17,7 @@ screentest: screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfo
 
 check: all
 	./screentest sh -c 'seq 1 2000; ls --color=always -la /usr/bin | head -40'
-	./screentest -k 'Go\e:help\r' vim -u NONE -N
+	./screentest -k 'Go\e:help\r' vim -u NONE -N -n
 	./screentest -k '1\r' -k '\r' -k '\r' vttest 32x64
 	./screentest -k q top -d 0.2
 	rm -rf shots && mkdir shots && ./screentest -t calcterm -s shots mc && rm -rf shots
