@@ -3,8 +3,9 @@
 CFLAGS = -std=c11 -Wall -Wextra -g -fsanitize=address,undefined
 SRC = ../src
 
-all: test_vt ptyrun screentest
+all: test_vt ptyrun screentest menutest
 	./test_vt
+	./menutest /dev/null
 
 test_vt: test_vt.c $(SRC)/vt.c $(SRC)/vt.h
 	$(CC) $(CFLAGS) -o $@ test_vt.c $(SRC)/vt.c
@@ -15,6 +16,9 @@ ptyrun: ptyrun.c $(SRC)/vt.c $(SRC)/vt.h
 screentest: screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c
 	$(CC) $(CFLAGS) -Istub -Istub/drivers -o $@ screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c -lutil
 
+menutest: menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c
+	$(CC) $(CFLAGS) -std=gnu11 -Istub -Istub/drivers -DCALCTERM_BUILD='"test"' -DPICO_PROGRAM_VERSION_STRING='"0.1"' -o $@ menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c
+
 check: all
 	./screentest sh -c 'seq 1 2000; ls --color=always -la /usr/bin | head -40'
 	./screentest -k 'Go\e:help\r' vim -u NONE -N -n
@@ -23,4 +27,4 @@ check: all
 	rm -rf shots && mkdir shots && ./screentest -t calcterm -s shots mc && rm -rf shots
 
 clean:
-	rm -f test_vt ptyrun screentest
+	rm -f test_vt ptyrun screentest menutest

@@ -27,7 +27,7 @@ The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100'
 
 ## The setup menu (Alt+F5)
 
-Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Changes take effect at once. *Save these settings* writes them to `/calcterm.cfg` on the card, a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and goes back to the shell.
+Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Each line has a highlighted letter that changes or does it in one key (P for the port, S the speed, T a screenshot, H back to the shell, and so on); the arrow keys work too. Changes take effect at once. *Save these settings* writes them to `/calcterm.cfg` on the card, a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and goes back to the shell.
 
 ## The serial ports
 

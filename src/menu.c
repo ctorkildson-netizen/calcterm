@@ -1,11 +1,13 @@
 /* menu.c -- the setup menu (Alt+F5), drawn over the terminal.
  *
  * Up and Down choose, Left and Right (or Space) change a setting, Enter
- * does an action, Esc or F5 closes it.  A change takes effect at once; Save
+ * does an action, and each line's highlighted letter does it in one key;
+ * Esc or F5 closes it.  A change takes effect at once; Save
  * puts the settings on the card for next time.  What arrives while it's
  * open goes on into the terminal, to be seen when it closes.
  */
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include "pico/stdlib.h"
 #include "picocalc_shell.h"
@@ -41,6 +43,9 @@ static const char *const names[I_COUNT] = {
 	"Port", "Speed", "Format", "Flow control", "Local echo", "Enter sends", "Backspace sends",
 	"Take a screenshot (also Alt+F4)", "Send a break", "Reset the terminal", "Save these settings", "Back to the shell",
 };
+
+/* each item's key: pressing it does what Right or Enter would on that line */
+static const char hotkeys[I_COUNT + 1] = "psflenbtkrvh";
 
 static char note[BOX_W];
 
@@ -113,11 +118,20 @@ static void draw(int sel)
 		if (i < I_SHOT) snprintf(line, sizeof line, " %-16s %-25s", names[i], value(i, b, sizeof b));
 		else snprintf(line, sizeof line, " %-42s", names[i]);
 		bool on = i == sel;
-		screen_text(BOX_X + 1, row++, line, on ? HI_FG : FG, on ? HI_BG : BG);
+		screen_text(BOX_X + 1, row, line, on ? HI_FG : FG, on ? HI_BG : BG);
+		/* its letter, picked out: the first of it in the item's name */
+		const char *h = NULL;
+		for (const char *p = names[i]; *p && !h; p++)
+			if (tolower((unsigned char)*p) == hotkeys[i]) h = line + 1 + (p - names[i]);
+		if (h) {
+			char c[2] = { *h, 0 };
+			screen_text(BOX_X + 1 + (int)(h - line), row, c, on ? 1 : 11, on ? HI_BG : BG);
+		}
+		row++;
 	}
 	row++;
 	if (note[0]) snprintf(line, sizeof line, " %-43s", note);
-	else snprintf(line, sizeof line, " %-43s", sel < I_SHOT ? "Left/Right: change   Esc: close" : "Enter: do it   Esc: close");
+	else snprintf(line, sizeof line, " %-43s", sel < I_SHOT ? "Letter or Left/Right: change   Esc: close" : "Letter or Enter: do it   Esc: close");
 	screen_text(BOX_X + 1, row, line, note[0] ? 11 : 7, BG);
 }
 
@@ -141,6 +155,12 @@ void menu_run(vt *t)
 		if (k < 0) { sleep_ms(5); continue; }
 		k &= ~KF_ALT;
 		if (k == VK_ESC || k == K_MENU || k == VK_F5) break;
+		if (k < 0x100 && tolower(k) >= 'a' && tolower(k) <= 'z') {
+			const char *h = strchr(hotkeys, tolower(k));
+			if (!h) continue;
+			sel = (int)(h - hotkeys);
+			k = sel < I_SHOT ? VK_RIGHT : VK_ENTER;
+		}
 		if (k == VK_UP) sel = (sel + I_COUNT - 1) % I_COUNT;
 		else if (k == VK_DOWN || k == VK_TAB) sel = (sel + 1) % I_COUNT;
 		else if (k == VK_LEFT) change(t, sel, -1);
