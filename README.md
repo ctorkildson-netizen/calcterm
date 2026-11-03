@@ -22,6 +22,7 @@ The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100'
 | Alt + key | Esc then the key (meta) |
 | Ctrl tapped on its own | makes the next key a Ctrl key (a `^` shows in the top-right corner) |
 | Brk | a quarter-second break on the line |
+| Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, and a .txt of the screen's text) |
 | **Alt+F5** | **the setup menu** |
 
 ## The setup menu (Alt+F5)

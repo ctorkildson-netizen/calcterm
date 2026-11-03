@@ -5,6 +5,7 @@
  * whole screen scrolls, the display's own vertical scrolling rolls it, so
  * only the new bottom line has to be drawn.
  */
+#include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
 #include "drivers/lcd.h"
@@ -28,6 +29,8 @@ static int cur_x = -1, cur_y = -1;	/* where the cursor was drawn */
 static bool sticky_drawn;
 static bool flashing;
 static absolute_time_t flash_end;
+static char note[VT_COLS + 1];
+static absolute_time_t note_end;
 
 void screen_init(void)
 {
@@ -64,10 +67,9 @@ static void cell_colours(const vt *t, const vt_cell *c, bool cursor, uint16_t *f
 	*bg = palette[rev ? f : b];
 }
 
-/* cells c0..c1 of a row */
-static void draw_span(const vt *t, int row, int c0, int c1)
+/* cells c0..c1 of a row into buf, w pixels wide; sticky: draw its mark */
+static void render_span(const vt *t, int row, int c0, int c1, uint16_t *buf, int w)
 {
-	int w = (c1 - c0 + 1) * GW;
 	for (int c = c0; c <= c1; c++) {
 		const vt_cell *cell = &t->cell[row][c];
 		bool cursor = t->cursor_on && row == t->y && c == t->x;
@@ -79,9 +81,24 @@ static void draw_span(const vt *t, int row, int c0, int c1)
 			fg = palette[0];
 			bg = palette[11];
 		}
-		glyph(strip, w, (c - c0) * GW, ch, fg, bg, cell->attr & A_UNDER);
+		glyph(buf, w, (c - c0) * GW, ch, fg, bg, cell->attr & A_UNDER);
 	}
+}
+
+static void draw_span(const vt *t, int row, int c0, int c1)
+{
+	int w = (c1 - c0 + 1) * GW;
+	render_span(t, row, c0, c1, strip, w);
 	lcd_blit(strip, (uint16_t)(c0 * GW), (uint16_t)(row * GH), (uint16_t)w, GH);
+}
+
+void screen_render_row(const vt *t, int row, uint16_t *buf)
+{
+	bool sticky = sticky_drawn, flash = flashing;
+	sticky_drawn = flashing = false;	/* (the picture is of the screen itself) */
+	render_span(t, row, 0, VT_COLS - 1, buf, VT_COLS * GW);
+	sticky_drawn = sticky;
+	flashing = flash;
 }
 
 void screen_draw(vt *t, bool sticky)
@@ -119,6 +136,21 @@ void screen_draw(vt *t, bool sticky)
 	}
 	cur_x = show ? t->x : -1;
 	cur_y = show ? t->y : -1;
+	if (note[0]) {
+		if (time_reached(note_end)) {
+			note[0] = 0;
+			t->dirty[VT_ROWS - 1] = true;		/* what was under it, back */
+			t->dirty_cols[VT_ROWS - 1] = ~(uint64_t)0;
+		} else {
+			screen_text(0, VT_ROWS - 1, note, 0, 11);
+		}
+	}
+}
+
+void screen_note(const char *s, int ms)
+{
+	snprintf(note, sizeof note, "%-*.*s", VT_COLS, VT_COLS, s);
+	note_end = make_timeout_time_ms((uint32_t)ms);
 }
 
 void screen_flash(void)

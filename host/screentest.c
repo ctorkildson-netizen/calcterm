@@ -23,6 +23,8 @@
 #include "drivers/lcd.h"
 #include "../src/vt.h"
 #include "../src/screen.h"
+#include "../src/shot.h"
+const char *stub_root;
 
 /* ---- the LCD model */
 uint16_t lcd_mem[FRAME_HEIGHT][WIDTH];
@@ -119,8 +121,10 @@ int main(int argc, char **argv)
 	const char *term = "vt100", *ppm = NULL;
 	char *keys[32];
 	int nkeys = 0, opt;
-	while ((opt = getopt(argc, argv, "+t:k:o:")) != -1) {
-		if (opt == 't') term = optarg;
+	const char *shotdir = NULL;
+	while ((opt = getopt(argc, argv, "+t:k:o:s:")) != -1) {
+		if (opt == 's') shotdir = optarg;
+		else if (opt == 't') term = optarg;
 		else if (opt == 'o') ppm = optarg;
 		else if (opt == 'k' && nkeys < 32) keys[nkeys++] = optarg;
 	}
@@ -160,6 +164,30 @@ int main(int argc, char **argv)
 			if (got[y][x] != shown(x, y)) {
 				if (bad++ < 5) printf("differs at pixel %d,%d (cell %d,%d)\n", x, y, x / 5, y / 10);
 			}
+	if (shotdir) {
+		/* the screenshot, against the display */
+		stub_root = shotdir;
+		shot_take(&t);
+		char p[512];
+		snprintf(p, sizeof p, "%s/screenshots/calcterm-001.bmp", shotdir);
+		FILE *f = fopen(p, "rb");
+		int sbad = 0;
+		if (!f) { printf("no screenshot\n"); sbad = 1; }
+		else {
+			fseek(f, 54, SEEK_SET);
+			for (int y = HEIGHT - 1; y >= 0; y--)
+				for (int x = 0; x < WIDTH; x++) {
+					uint8_t c[3];
+					if (fread(c, 1, 3, f) != 3) { sbad++; continue; }
+					uint16_t v = shown(x, y);
+					uint8_t want[3] = { (uint8_t)((v & 31) << 3), (uint8_t)(((v >> 5) & 63) << 2), (uint8_t)((v >> 11) << 3) };
+					if (memcmp(c, want, 3)) sbad++;
+				}
+			fclose(f);
+		}
+		printf("screenshot: %s (%d pixels differ)\n", sbad ? "MISMATCH" : "ok", sbad);
+		bad += sbad;
+	}
 	printf("%s: %s (%d pixels differ)\n",
 	       argv[optind], bad ? "MISMATCH" : "ok", bad);
 	return bad != 0;

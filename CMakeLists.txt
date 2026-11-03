@@ -14,7 +14,7 @@ picocalc_fatfs(${MODULES}/picocalc-text-starter)	# the SD card, for the settings
 
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
-    src/settings.c src/termfont.c ${DRV}/font-8x10.c
+    src/settings.c src/shot.c src/termfont.c ${DRV}/font-8x10.c
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(calcterm PRIVATE

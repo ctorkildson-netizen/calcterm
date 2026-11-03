@@ -20,6 +20,7 @@
 #include "link.h"
 #include "menu.h"
 #include "settings.h"
+#include "shot.h"
 
 #define DRAW_EVERY_MS 40
 
@@ -61,6 +62,7 @@ static void key(int k)
 	k &= ~KF_ALT;
 	if (k == K_MENU) { menu_run(&term); return; }
 	if (k == K_BRK) { link_break(); return; }
+	if (k == K_SHOT) { screen_draw(&term, false); shot_take(&term); return; }
 	if (k >= 0x100) vt_key(&term, k);
 	else vt_key_char(&term, (uint8_t)k, alt);
 }
