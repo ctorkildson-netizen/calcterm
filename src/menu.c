@@ -41,11 +41,11 @@ enum { I_PORT, I_SPEED, I_FORMAT, I_FLOW, I_ECHO, I_ENTER, I_BS,
 
 static const char *const names[I_COUNT] = {
 	"Port", "Speed", "Format", "Flow control", "Local echo", "Enter sends", "Backspace sends",
-	"Take a screenshot (also Alt+F4)", "Send a break", "Reset the terminal", "Save these settings", "Back to the shell",
+	"Take a screenshot (also Alt+F4)", "Send a break", "Reset the terminal", "Save these settings", "Quit to the PicoCalc's shell",
 };
 
 /* each item's key: pressing it does what Right or Enter would on that line */
-static const char hotkeys[I_COUNT + 1] = "psflenbtkrvh";
+static const char hotkeys[I_COUNT + 1] = "psflenbtkrvq";
 
 static char note[BOX_W];
 

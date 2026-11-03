@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 	(void)argc;
 	menu_run(&t);
 	save(argv[1]);
-	static const int k3[] = { 't', 0 };
+	static const int k3[] = { 't', 'q', 0 };
 	script = k3; pos = 0;
 	menu_run(&t);
 	return 0;
