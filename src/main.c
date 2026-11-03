@@ -48,7 +48,7 @@ static void sign_on(bool loaded)
 	char b[160];
 	static const char *const fmt[] = { "N", "O", "E" };
 	snprintf(b, sizeof b,
-		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal\r\n"
+		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal (" CALCTERM_BUILD ")\r\n"
 		 "%lu %d%s%d on %s%s.  Alt+F5: setup.\r\n\n",
 		 (unsigned long)cfg.link.baud, cfg.link.data, fmt[cfg.link.parity], cfg.link.stop,
 		 cfg.link.port == PORT_GP45 ? "GP4/GP5" : "USB-C",

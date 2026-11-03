@@ -15,6 +15,7 @@
 #include "screen.h"
 #include "settings.h"
 #include "menu.h"
+#include "shot.h"
 
 #define BOX_W 46
 #define BOX_X ((VT_COLS - BOX_W) / 2)
@@ -34,11 +35,11 @@ static const struct { int data, parity, stop; const char *name; } formats[] = {
 #define NFORMATS (sizeof formats / sizeof formats[0])
 
 enum { I_PORT, I_SPEED, I_FORMAT, I_FLOW, I_ECHO, I_ENTER, I_BS,
-       I_BREAK, I_RESET, I_SAVE, I_LEAVE, I_COUNT };
+       I_SHOT, I_BREAK, I_RESET, I_SAVE, I_LEAVE, I_COUNT };
 
 static const char *const names[I_COUNT] = {
 	"Port", "Speed", "Format", "Flow control", "Local echo", "Enter sends", "Backspace sends",
-	"Send a break", "Reset the terminal", "Save these settings", "Back to the shell",
+	"Take a screenshot (also Alt+F4)", "Send a break", "Reset the terminal", "Save these settings", "Back to the shell",
 };
 
 static char note[BOX_W];
@@ -105,18 +106,18 @@ static void draw(int sel)
 {
 	char line[BOX_W + 1], b[16];
 	screen_fill(BOX_X, BOX_Y, BOX_W, I_COUNT + 7, BG);
-	screen_text(BOX_X + 2, BOX_Y + 1, "calcterm " PICO_PROGRAM_VERSION_STRING " -- setup", 11, BG);
+	screen_text(BOX_X + 2, BOX_Y + 1, "calcterm " PICO_PROGRAM_VERSION_STRING " -- setup  (" CALCTERM_BUILD ")", 11, BG);
 	int row = BOX_Y + 3;
 	for (int i = 0; i < I_COUNT; i++) {
-		if (i == I_BREAK) row++;
-		if (i < I_BREAK) snprintf(line, sizeof line, " %-16s %-25s", names[i], value(i, b, sizeof b));
+		if (i == I_SHOT) row++;
+		if (i < I_SHOT) snprintf(line, sizeof line, " %-16s %-25s", names[i], value(i, b, sizeof b));
 		else snprintf(line, sizeof line, " %-42s", names[i]);
 		bool on = i == sel;
 		screen_text(BOX_X + 1, row++, line, on ? HI_FG : FG, on ? HI_BG : BG);
 	}
 	row++;
 	if (note[0]) snprintf(line, sizeof line, " %-43s", note);
-	else snprintf(line, sizeof line, " %-43s", sel < I_BREAK ? "Left/Right: change   Esc: close" : "Enter: do it   Esc: close");
+	else snprintf(line, sizeof line, " %-43s", sel < I_SHOT ? "Left/Right: change   Esc: close" : "Enter: do it   Esc: close");
 	screen_text(BOX_X + 1, row, line, note[0] ? 11 : 7, BG);
 }
 
@@ -130,6 +131,7 @@ static void keep_reading(vt *t)
 void menu_run(vt *t)
 {
 	int sel = 0;
+	bool shoot = false;
 	note[0] = 0;
 	draw(sel);
 	for (;;) {
@@ -144,7 +146,8 @@ void menu_run(vt *t)
 		else if (k == VK_LEFT) change(t, sel, -1);
 		else if (k == VK_RIGHT || k == ' ') change(t, sel, +1);
 		else if (k == VK_ENTER) {
-			if (sel < I_BREAK) { change(t, sel, +1); }
+			if (sel < I_SHOT) { change(t, sel, +1); }
+			else if (sel == I_SHOT) { shoot = true; break; }
 			else if (sel == I_BREAK) { link_break(); snprintf(note, sizeof note, "Break sent."); }
 			else if (sel == I_RESET) { vt_reset(t); apply_settings(t); snprintf(note, sizeof note, "The terminal's reset."); }
 			else if (sel == I_SAVE) {
@@ -159,4 +162,8 @@ void menu_run(vt *t)
 		draw(sel);
 	}
 	vt_touch_all(t);
+	if (shoot) {			/* of the terminal, without the menu */
+		screen_draw(t, false);
+		shot_take(t);
+	}
 }
