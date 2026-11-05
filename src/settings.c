@@ -1,4 +1,4 @@
-/* settings.c -- the settings, as lines of name=value in /calcterm.cfg, so the
+/* settings.c -- the settings, as lines of name=value in /calcterm/calcterm.cfg, so the
  * file can be read and changed by hand (unknown names are skipped). */
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +26,8 @@ static bool yes(const char *v) { return !strcmp(v, "on") || !strcmp(v, "yes") ||
 bool settings_load(void)
 {
 	FIL f;
-	if (f_open(&f, CFG_PATH, FA_READ) != FR_OK) return false;
+	if (f_open(&f, CFG_PATH, FA_READ) != FR_OK && f_open(&f, CFG_OLD, FA_READ) != FR_OK)
+		return false;
 	static char text[1024];
 	UINT got = 0;
 	f_read(&f, text, sizeof text - 1, &got);
@@ -66,6 +67,7 @@ bool settings_save(const char **why)
 		cfg.link.xonxoff ? "on" : "off", cfg.echo ? "on" : "off",
 		cfg.newline ? "on" : "off", cfg.bs_del ? "del" : "bs");
 	FIL f;
+	f_mkdir(CFG_DIR);			/* (FR_EXIST if it's there) */
 	FRESULT r = f_open(&f, CFG_PATH, FA_WRITE | FA_CREATE_ALWAYS);
 	if (r != FR_OK) { *why = fs_error_string(r); return false; }
 	UINT put = 0;
@@ -73,5 +75,6 @@ bool settings_save(const char **why)
 	FRESULT rc = f_close(&f);
 	if (r == FR_OK) r = rc;
 	if (r != FR_OK || put != (UINT)n) { *why = r != FR_OK ? fs_error_string(r) : "the card is full"; return false; }
+	f_unlink(CFG_OLD);			/* the old place, if there was one: done with */
 	return true;
 }

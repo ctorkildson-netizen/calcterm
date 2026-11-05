@@ -27,12 +27,27 @@ The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100'
 
 ## The setup menu (Alt+F5)
 
-Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Each line has a highlighted letter that changes or does it in one key (P for the port, S the speed, T a screenshot, Q to quit calcterm for the PicoCalc's own shell, and so on); the arrow keys work too. Changes take effect at once. *Save these settings* writes them to `/calcterm.cfg` on the card, a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and quits calcterm for the PicoCalc's shell (the host's session carries on, to be picked up next time).
+Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Each line has a highlighted letter that changes or does it in one key (P for the port, S the speed, T a screenshot, Q to quit calcterm for the PicoCalc's own shell, and so on); the arrow keys work too. Changes take effect at once. *Save these settings* writes them to `/calcterm/calcterm.cfg` on the card (a folder of its own, as the PicoCalc's programs keep theirs), a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and quits calcterm for the PicoCalc's shell (the host's session carries on, to be picked up next time).
 
 ## The serial ports
 
 - **USB-C (UART0, the default).** The PicoCalc's USB-C socket goes to the Pico's UART0 (GP0/GP1) through its CH340, so a USB cable to another computer is a serial line with nothing else needed.
-- **GP4/GP5 (UART1).** For an RS-232 level shifter such as a MAX3232 board: GP4 is TX, GP5 RX. Don't use the UART0 pins on the side header for this; the CH340 is on the same lines.
+- **GP4/GP5 (UART1).** For a real RS-232 port, through a MAX3232 level-shifter board: GP4 is TX, GP5 RX. Don't use the UART0 pins on the side header for this; the CH340 is on the same lines.
+
+### Wiring a MAX3232 board
+
+The pins are the upper of the two rows of eight holes on the PicoCalc's left side (the "Core GPIOs" in ClockworkPi's assembly guide). Counting from the end nearest the volume knob:
+
+| Hole | Pin | MAX3232 board |
+| --- | --- | --- |
+| 1 | 3V3 OUT | VCC (3.3 V, not 5 V) |
+| 4 | GP4 (TX) | see below |
+| 5 | GP5 (RX) | see below |
+| 8 | GND | GND |
+
+Boards differ in how they label TX and RX. Most name the direction of the signal (connect the board's RXD to the Pico's TX). Some, such as the common blue HW-044, name the pin they connect to: on those, TXD goes to GP4 and RXD to GP5. If nothing comes through, swap the two wires; the wrong way round does no harm. Don't use the lower row's UART1 holes: those go to the keyboard's own processor, not the Pico.
+
+To check the PicoCalc's half on its own, bridge pins 2 and 3 of the board's DB9 socket: with local echo off, what you type should come back. From the board's DB9 to a PC is a null-modem connection (both ends are terminals).
 
 XON/XOFF is on by default: if the PicoCalc falls behind (it has a 16 KB buffer), it asks the host to pause.
 
