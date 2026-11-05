@@ -6,3 +6,4 @@ host/shots/
 .*.sw?
 .sw?
 host/menutest
+build-fonttest/
