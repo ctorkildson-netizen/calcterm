@@ -1,0 +1,7 @@
+/home/claude/calcterm/build-fonttest/_deps/picotool/picotool
+/home/claude/calcterm/build-fonttest/_deps/picotool/picotoolTargets.cmake
+/home/claude/calcterm/build-fonttest/_deps/picotool/picotoolTargets-release.cmake
+/home/claude/calcterm/build-fonttest/_deps/picotool/picotoolConfig.cmake
+/home/claude/calcterm/build-fonttest/_deps/picotool/picotoolConfigVersion.cmake
+/home/claude/calcterm/build-fonttest/_deps/picotool/enc_bootloader.elf
+/home/claude/calcterm/build-fonttest/_deps/picotool/enc_bootloader_mbedtls.elf

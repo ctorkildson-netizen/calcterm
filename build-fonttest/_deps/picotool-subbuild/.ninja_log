@@ -1,0 +1,21 @@
+# ninja log v5
+1	88	1793734418849832483	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-mkdir	c387e819c4b305fe
+1	88	1793734418849832483	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-mkdir	c387e819c4b305fe
+88	18241	1793734437065833565	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-download	454794fbebb683b4
+88	18241	1793734437065833565	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-download	454794fbebb683b4
+18241	18257	0	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-update	5504ff5a42316415
+18241	18257	0	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-update	5504ff5a42316415
+18257	18271	1793734437097833567	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-patch	6ca74f6e6e641273
+18257	18271	1793734437097833567	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-patch	6ca74f6e6e641273
+18271	18285	1793734437109833568	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-configure	1b5ec50856f1c6b7
+18271	18285	1793734437109833568	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-configure	1b5ec50856f1c6b7
+18285	18298	1793734437125833569	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-build	5375acfa7be4ac14
+18285	18298	1793734437125833569	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-build	5375acfa7be4ac14
+18298	18311	1793734437137833570	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-install	da7601b34a756bdb
+18298	18311	1793734437137833570	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-install	da7601b34a756bdb
+18311	18325	1793734437149833570	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-test	a3e59f1db1479212
+18311	18325	1793734437149833570	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-test	a3e59f1db1479212
+18325	18345	1793734437169833572	CMakeFiles/picotool-populate-complete	72f1b73fde276a22
+18325	18345	1793734437169833572	picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-done	72f1b73fde276a22
+18325	18345	1793734437169833572	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/CMakeFiles/picotool-populate-complete	72f1b73fde276a22
+18325	18345	1793734437169833572	/home/claude/calcterm/build-fonttest/_deps/picotool-subbuild/picotool-populate-prefix/src/picotool-populate-stamp/picotool-populate-done	72f1b73fde276a22
