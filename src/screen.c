@@ -4,6 +4,10 @@
  * the last), drawn here into a buffer and sent with one lcd_blit.  When the
  * whole screen scrolls, the display's own vertical scrolling rolls it, so
  * only the new bottom line has to be drawn.
+ *
+ * At 64 columns the letters are the 5x10 font; at 80, calcterm's own
+ * 4x10 (src/font4.c).  The setup menu and the notes on the bottom line are
+ * always in the 5x10 font, in its 64-column grid.
  */
 #include <stdio.h>
 #include <string.h>
@@ -13,9 +17,11 @@
 #include "screen.h"
 
 extern const font_t font_term;
+extern const uint8_t font4[160][10];
 
-#define GW 5			/* glyph width */
+#define GW 5			/* the 5x10 font's width (the menu's grid) */
 #define GH GLYPH_HEIGHT		/* 10 */
+#define TEXT_COLS 64		/* the menu's and the notes' grid */
 
 static const uint16_t palette[16] = {
 	RGB(0, 0, 0),       RGB(205, 49, 49),   RGB(13, 188, 121),  RGB(229, 229, 16),
@@ -24,12 +30,12 @@ static const uint16_t palette[16] = {
 	RGB(100, 160, 255), RGB(255, 110, 255), RGB(70, 220, 255),  RGB(255, 255, 255),
 };
 
-static uint16_t strip[GH * VT_COLS * GW];
+static uint16_t strip[GH * 320];	/* one row of cells, either font */
 static int cur_x = -1, cur_y = -1;	/* where the cursor was drawn */
 static bool sticky_drawn;
 static bool flashing;
 static absolute_time_t flash_end;
-static char note[VT_COLS + 1];
+static char note[TEXT_COLS + 1];
 static absolute_time_t note_end;
 
 void screen_init(void)
@@ -38,6 +44,21 @@ void screen_init(void)
 	lcd_set_background(palette[0]);
 	lcd_clear_screen();
 	lcd_enable_cursor(false);
+}
+
+/* one cell of the 4x10 font into the strip */
+static void glyph4(uint16_t *buf, int w, int px, uint8_t ch, uint16_t fg, uint16_t bg, bool under)
+{
+	const uint8_t *g = font4[ch < 160 ? ch : '?'];
+	for (int r = 0; r < GH; r++) {
+		uint8_t bits = g[r];
+		if (under && r == GH - 1) bits = 0xF;
+		uint16_t *p = buf + r * w + px;
+		p[0] = bits & 8 ? fg : bg;
+		p[1] = bits & 4 ? fg : bg;
+		p[2] = bits & 2 ? fg : bg;
+		p[3] = bits & 1 ? fg : bg;
+	}
 }
 
 /* one cell into the strip, whose width is w pixels, at pixel column px */
@@ -70,35 +91,47 @@ static void cell_colours(const vt *t, const vt_cell *c, bool cursor, uint16_t *f
 /* cells c0..c1 of a row into buf, w pixels wide; sticky: draw its mark */
 static void render_span(const vt *t, int row, int c0, int c1, uint16_t *buf, int w)
 {
+	int cw = t->cols == 80 ? 4 : GW;
 	for (int c = c0; c <= c1; c++) {
 		const vt_cell *cell = &t->cell[row][c];
 		bool cursor = t->cursor_on && row == t->y && c == t->x;
 		uint16_t fg, bg;
 		cell_colours(t, cell, cursor, &fg, &bg);
 		uint8_t ch = cell->ch;
-		if (sticky_drawn && row == 0 && c == VT_COLS - 1) {	/* sticky Ctrl's mark */
+		if (sticky_drawn && row == 0 && c == t->cols - 1) {	/* sticky Ctrl's mark */
 			ch = '^';
 			fg = palette[0];
 			bg = palette[11];
 		}
-		glyph(buf, w, (c - c0) * GW, ch, fg, bg, cell->attr & A_UNDER);
+		if (cw == 4) glyph4(buf, w, (c - c0) * 4, ch, fg, bg, cell->attr & A_UNDER);
+		else glyph(buf, w, (c - c0) * GW, ch, fg, bg, cell->attr & A_UNDER);
 	}
 }
 
 static void draw_span(const vt *t, int row, int c0, int c1)
 {
-	int w = (c1 - c0 + 1) * GW;
+	int cw = t->cols == 80 ? 4 : GW;
+	int w = (c1 - c0 + 1) * cw;
 	render_span(t, row, c0, c1, strip, w);
-	lcd_blit(strip, (uint16_t)(c0 * GW), (uint16_t)(row * GH), (uint16_t)w, GH);
+	lcd_blit(strip, (uint16_t)(c0 * cw), (uint16_t)(row * GH), (uint16_t)w, GH);
 }
 
 void screen_render_row(const vt *t, int row, uint16_t *buf)
 {
 	bool sticky = sticky_drawn, flash = flashing;
 	sticky_drawn = flashing = false;	/* (the picture is of the screen itself) */
-	render_span(t, row, 0, VT_COLS - 1, buf, VT_COLS * GW);
+	render_span(t, row, 0, t->cols - 1, buf, 320);
 	sticky_drawn = sticky;
 	flashing = flash;
+}
+
+/* a cell to be drawn again (the cursor's, the sticky mark's) */
+static void mark(vt *t, int row, int col)
+{
+	if (col >= t->cols) col = t->cols - 1;
+	if (!t->dirty[row] || col < t->dlo[row]) t->dlo[row] = (uint8_t)col;
+	if (!t->dirty[row] || col > t->dhi[row]) t->dhi[row] = (uint8_t)col;
+	t->dirty[row] = true;
 }
 
 void screen_draw(vt *t, bool sticky)
@@ -115,24 +148,20 @@ void screen_draw(vt *t, bool sticky)
 	/* the old cursor, the sticky mark: put back what's under them */
 	bool show = t->cursor_on;
 	if (cur_y >= 0 && (!show || cur_x != t->x || cur_y != t->y)) {
-		t->dirty[cur_y] = true;
-		t->dirty_cols[cur_y] |= (uint64_t)1 << cur_x;
+		mark(t, cur_y, cur_x);
 	}
 	if (sticky != sticky_drawn) {
 		sticky_drawn = sticky;
-		t->dirty[0] = true;
-		t->dirty_cols[0] |= (uint64_t)1 << (VT_COLS - 1);
+		mark(t, 0, t->cols - 1);
 	}
 	if (show) {
-		t->dirty[t->y] = true;
-		t->dirty_cols[t->y] |= (uint64_t)1 << t->x;
+		mark(t, t->y, t->x);
 	}
 	for (int r = 0; r < VT_ROWS; r++) {
 		if (!t->dirty[r]) continue;
-		uint64_t d = t->dirty_cols[r];
-		if (d) draw_span(t, r, __builtin_ctzll(d), 63 - __builtin_clzll(d));
+		int hi = t->dhi[r] < t->cols ? t->dhi[r] : t->cols - 1;
+		if (t->dlo[r] <= hi) draw_span(t, r, t->dlo[r], hi);
 		t->dirty[r] = false;
-		t->dirty_cols[r] = 0;
 	}
 	cur_x = show ? t->x : -1;
 	cur_y = show ? t->y : -1;
@@ -140,7 +169,8 @@ void screen_draw(vt *t, bool sticky)
 		if (time_reached(note_end)) {
 			note[0] = 0;
 			t->dirty[VT_ROWS - 1] = true;		/* what was under it, back */
-			t->dirty_cols[VT_ROWS - 1] = ~(uint64_t)0;
+			t->dlo[VT_ROWS - 1] = 0;
+			t->dhi[VT_ROWS - 1] = (uint8_t)(t->cols - 1);
 		} else {
 			screen_text(0, VT_ROWS - 1, note, 0, 11);
 		}
@@ -149,7 +179,7 @@ void screen_draw(vt *t, bool sticky)
 
 void screen_note(const char *s, int ms)
 {
-	snprintf(note, sizeof note, "%-*.*s", VT_COLS, VT_COLS, s);
+	snprintf(note, sizeof note, "%-*.*s", TEXT_COLS, TEXT_COLS, s);
 	note_end = make_timeout_time_ms((uint32_t)ms);
 }
 
@@ -162,7 +192,7 @@ void screen_flash(void)
 void screen_text(int col, int row, const char *s, int fg, int bg)
 {
 	int n = (int)strlen(s);
-	if (col + n > VT_COLS) n = VT_COLS - col;
+	if (col + n > TEXT_COLS) n = TEXT_COLS - col;
 	if (n <= 0) return;
 	int w = n * GW;
 	for (int i = 0; i < n; i++)

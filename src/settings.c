@@ -19,6 +19,7 @@ void settings_defaults(void)
 	cfg.echo = false;
 	cfg.newline = false;
 	cfg.bs_del = true;
+	cfg.cols = 64;
 }
 
 static bool yes(const char *v) { return !strcmp(v, "on") || !strcmp(v, "yes") || !strcmp(v, "1"); }
@@ -50,6 +51,7 @@ bool settings_load(void)
 		else if (!strcmp(line, "echo")) cfg.echo = yes(v);
 		else if (!strcmp(line, "newline")) cfg.newline = yes(v);
 		else if (!strcmp(line, "backspace")) cfg.bs_del = strcmp(v, "bs") != 0;
+		else if (!strcmp(line, "columns")) cfg.cols = atoi(v) == 80 ? 80 : 64;
 	}
 	return true;
 }
@@ -59,13 +61,13 @@ bool settings_save(const char **why)
 	char text[512];
 	int n = snprintf(text, sizeof text,
 		"# calcterm settings (the setup menu writes this file)\n"
-		"port=%s\nspeed=%lu\nformat=%d%c%d\nxonxoff=%s\necho=%s\nnewline=%s\nbackspace=%s\n",
+		"port=%s\nspeed=%lu\nformat=%d%c%d\nxonxoff=%s\necho=%s\nnewline=%s\nbackspace=%s\ncolumns=%d\n",
 		cfg.link.port == PORT_GP45 ? "gp4-gp5" : "usb-c",
 		(unsigned long)cfg.link.baud,
 		cfg.link.data, cfg.link.parity == PAR_EVEN ? 'E' : cfg.link.parity == PAR_ODD ? 'O' : 'N',
 		cfg.link.stop,
 		cfg.link.xonxoff ? "on" : "off", cfg.echo ? "on" : "off",
-		cfg.newline ? "on" : "off", cfg.bs_del ? "del" : "bs");
+		cfg.newline ? "on" : "off", cfg.bs_del ? "del" : "bs", cfg.cols);
 	FIL f;
 	f_mkdir(CFG_DIR);			/* (FR_EXIST if it's there) */
 	FRESULT r = f_open(&f, CFG_PATH, FA_WRITE | FA_CREATE_ALWAYS);

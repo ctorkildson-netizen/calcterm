@@ -17,7 +17,7 @@
 #include "screen.h"
 #include "shot.h"
 
-#define W (VT_COLS * 5)
+#define W 320
 #define H (VT_ROWS * 10)
 
 static void put_le(uint8_t *p, uint32_t v, int n)
@@ -100,12 +100,12 @@ static bool write_txt(const vt *t, const char *path)
 {
 	FIL f;
 	if (f_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
-	char b[VT_COLS + 16];
+	char b[VT_MAX_COLS + 16];
 	bool ok = write_all(&f, "calcterm screenshot\r\n\r\n", 23);
 	for (int r = 0; ok && r < VT_ROWS; r++) {
-		char row[VT_COLS + 1];
+		char row[VT_MAX_COLS + 1];
 		vt_row_text(t, r, row);
-		for (int c = 0; c < VT_COLS; c++)
+		for (int c = 0; c < t->cols; c++)
 			if ((uint8_t)row[c] < 0x20 || (uint8_t)row[c] >= 0x7F) row[c] = '.';
 		int n = snprintf(b, sizeof b, "%2d |%s|\r\n", r + 1, row);
 		ok = write_all(&f, b, (UINT)n);

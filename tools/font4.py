@@ -4,8 +4,9 @@
 Each glyph is drawn here, 3 pixels wide with the 4th column left as the gap
 between letters, in 10 rows (80x32 on the screen).  A 12-row version (80x26)
 is made from the same drawings by adding a row of space on top and repeating
-one row of each letter's body.  Pixels have four levels, so letters that
-don't fit in 3 pixels (m, w, M, W, N, @) can use part-lit pixels:
+one row of each letter's body.  calcterm uses the 10-row font with plain
+on/off pixels (tested on the PicoCalc: the grey made no difference), so
+a level of two thirds or more is drawn as on.  The levels are:
 
     '#' full   '+' two thirds   '-' one third   '.' off
 
@@ -33,6 +34,16 @@ def put(ch, top, *rows):
     G[ord(ch) if isinstance(ch, str) else ch] = g
 
 
+def put4(ch, top, *rows):
+    """a letter that needs all 4 columns (no gap after it)"""
+    g = [[0] * 4 for _ in range(H)]
+    for i, r in enumerate(rows):
+        assert len(r) == 4, (ch, r)
+        for x, c in enumerate(r):
+            g[top + i][x] = LEVEL[c]
+    G[ord(ch)] = g
+
+
 # capitals, rows 1-7
 put('A', 1, ".#.", "#.#", "#.#", "###", "#.#", "#.#", "#.#")
 put('B', 1, "##.", "#.#", "#.#", "##.", "#.#", "#.#", "##.")
@@ -46,17 +57,17 @@ put('I', 1, "###", ".#.", ".#.", ".#.", ".#.", ".#.", "###")
 put('J', 1, "..#", "..#", "..#", "..#", "..#", "#.#", ".#.")
 put('K', 1, "#.#", "#.#", "##.", "#..", "##.", "#.#", "#.#")
 put('L', 1, "#..", "#..", "#..", "#..", "#..", "#..", "###")
-put('M', 1, "#.#", "###", "###", "#+#", "#.#", "#.#", "#.#")
-put('N', 1, "#.#", "##+", "##+", "#+#", "+##", "+##", "#.#")
+put('M', 1, "#.#", "###", "###", "#.#", "#.#", "#.#", "#.#")
+put4('N', 1, "#..#", "##.#", "##.#", "#.##", "#.##", "#..#", "#..#")
 put('O', 1, ".#.", "#.#", "#.#", "#.#", "#.#", "#.#", ".#.")
 put('P', 1, "##.", "#.#", "#.#", "##.", "#..", "#..", "#..")
 put('Q', 1, ".#.", "#.#", "#.#", "#.#", "#.#", "#+#", ".##")
 put('R', 1, "##.", "#.#", "#.#", "##.", "#.#", "#.#", "#.#")
 put('S', 1, ".##", "#..", "#..", ".#.", "..#", "..#", "##.")
 put('T', 1, "###", ".#.", ".#.", ".#.", ".#.", ".#.", ".#.")
-put('U', 1, "#.#", "#.#", "#.#", "#.#", "#.#", "#.#", ".#.")
-put('V', 1, "#.#", "#.#", "#.#", "#.#", "#.#", "+#+", ".#.")
-put('W', 1, "#.#", "#.#", "#.#", "#+#", "###", "###", "#.#")
+put('U', 1, "#.#", "#.#", "#.#", "#.#", "#.#", "#.#", "###")
+put('V', 1, "#.#", "#.#", "#.#", "#.#", "#.#", ".#.", ".#.")
+put('W', 1, "#.#", "#.#", "#.#", "#.#", "###", "###", "#.#")
 put('X', 1, "#.#", "#.#", "+#+", ".#.", "+#+", "#.#", "#.#")
 put('Y', 1, "#.#", "#.#", "#.#", ".#.", ".#.", ".#.", ".#.")
 put('Z', 1, "###", "..#", "..#", ".#.", "#..", "#..", "###")
@@ -74,7 +85,7 @@ put('i', 1, ".#.", "...", "##.", ".#.", ".#.", ".#.", "###")
 put('j', 1, "..#", "...", ".##", "..#", "..#", "..#", "..#", "#.#", ".#.")
 put('k', 1, "#..", "#..", "#.#", "#.#", "##.", "#.#", "#.#")
 put('l', 1, "##.", ".#.", ".#.", ".#.", ".#.", ".#.", "..#")
-put('m', 3, "##+", "#+#", "#+#", "#+#", "#+#")
+put('m', 3, "###", "###", "#.#", "#.#", "#.#")
 put('n', 3, "##.", "#.#", "#.#", "#.#", "#.#")
 put('o', 3, ".#.", "#.#", "#.#", "#.#", ".#.")
 put('p', 3, "##.", "#.#", "#.#", "#.#", "##.", "#..", "#..")
@@ -84,13 +95,13 @@ put('s', 3, ".##", "#..", ".#.", "..#", "##.")
 put('t', 1, ".#.", ".#.", "###", ".#.", ".#.", ".#.", "..#")
 put('u', 3, "#.#", "#.#", "#.#", "#.#", ".##")
 put('v', 3, "#.#", "#.#", "#.#", "+#+", ".#.")
-put('w', 3, "#.#", "#.#", "#+#", "###", "+.+")
+put('w', 3, "#.#", "#.#", "#.#", "###", "###")
 put('x', 3, "#.#", "+#+", ".#.", "+#+", "#.#")
 put('y', 3, "#.#", "#.#", "#.#", "#.#", ".##", "..#", "##.")
 put('z', 3, "###", "..#", ".#.", "#..", "###")
 
 # digits, rows 1-7 (the zero has a dot, to tell it from O)
-put('0', 1, ".#.", "#.#", "#.#", "#+#", "#.#", "#.#", ".#.")
+put('0', 1, "###", "#.#", "#.#", "#.#", "#.#", "#.#", "###")
 put('1', 1, ".#.", "##.", ".#.", ".#.", ".#.", ".#.", "###")
 put('2', 1, ".#.", "#.#", "..#", ".#.", "#..", "#..", "###")
 put('3', 1, "##.", "..#", "..#", ".#.", "..#", "..#", "##.")
@@ -300,8 +311,25 @@ def sample_c():
     return "\n".join(out)
 
 
+def c_source_1bit():
+    """src/font4.c for calcterm: the 10-row font, plain on/off pixels (a
+    pixel at two thirds or more is on), the left pixel in bit 3"""
+    out = ["/* font4.c -- calcterm's 4x10 font for 80 columns.",
+           " * Made by tools/font4.py --calcterm; edit that, not this. */",
+           "#include <stdint.h>", "",
+           "const uint8_t font4[160][10] = {"]
+    for code in range(160):
+        g = glyph(code, H) if (code in G or code in LINES or code in FILL) else [[0] * 4 for _ in range(H)]
+        rows = [sum(8 >> x for x in range(4) if r[x] >= 2) for r in g]
+        out.append(f"\t/* 0x{code:02X} */ {{" + ",".join(f"0x{b:X}" for b in rows) + "},")
+    out.append("};")
+    return "\n".join(out)
+
+
 if __name__ == '__main__':
-    if len(sys.argv) == 3 and sys.argv[1] == '--c':
+    if len(sys.argv) == 3 and sys.argv[1] == '--calcterm':
+        open(sys.argv[2], "w").write(c_source_1bit() + "\n")
+    elif len(sys.argv) == 3 and sys.argv[1] == '--c':
         open(sys.argv[2] + "/font4.c", "w").write(c_source() + "\n")
         open(sys.argv[2] + "/sample.h", "w").write(sample_c() + "\n")
     elif len(sys.argv) == 3 and sys.argv[1] == '--preview':

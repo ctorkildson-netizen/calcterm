@@ -44,7 +44,7 @@ static void save(const char *path)
 int main(int argc, char **argv)
 {
 	static vt t;
-	cfg.link.baud = 115200; cfg.link.data = 8; cfg.link.stop = 1; cfg.link.xonxoff = true; cfg.bs_del = true;
+	cfg.link.baud = 115200; cfg.link.data = 8; cfg.link.stop = 1; cfg.link.xonxoff = true; cfg.bs_del = true; cfg.cols = 64;
 	screen_init();
 	vt_init(&t, NULL, NULL, NULL);
 	vt_input(&t, (const uint8_t *)"chris@mini:~$ ", 14);
@@ -59,6 +59,13 @@ int main(int argc, char **argv)
 	(void)argc;
 	menu_run(&t);
 	save(argv[1]);
+	static const int k4[] = { 'w', 0 };	/* to 80 columns, with the menu still up */
+	script = k4; pos = 0;
+	vt_input(&t, (const uint8_t *)"\r\n80 columns now: the line is longer than sixty-four characters, see", 68);
+	menu_run(&t);
+	printf("columns %d (settings %d)\n", t.cols, cfg.cols);
+	screen_draw(&t, false);
+	if (argc > 2) save(argv[2]);
 	static const int k3[] = { 't', 'q', 0 };
 	script = k3; pos = 0;
 	menu_run(&t);

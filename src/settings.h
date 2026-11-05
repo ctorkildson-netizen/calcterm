@@ -10,6 +10,7 @@ typedef struct {
 	bool echo;		/* local echo */
 	bool newline;		/* Enter sends CR LF, and LF also returns */
 	bool bs_del;		/* Backspace sends DEL (else BS) */
+	int cols;		/* 64 or 80 */
 } settings;
 
 extern settings cfg;
