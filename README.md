@@ -1,6 +1,6 @@
 # calcterm
 
-A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and an FTP client are to follow.
+A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and SFTP are to follow.
 
 The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added so boxes join up, or of 80 columns in calcterm's own 4×10 font. Alt+F1 switches between them.
 
@@ -10,6 +10,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **VT52 mode**, entered and left as the VT100 does (`ESC [ ? 2 l`, `ESC <`).
 - **What Linux sends anyway**: the 16 colours (256-colour and RGB requests are matched to the nearest of them), bold, underline, reverse, the alternate screen that `vim`, `less` and `htop` use, and UTF-8. Box-drawing characters arrive as UTF-8 from most programs today and are shown with the line-drawing glyphs; other non-ASCII characters show as `?`.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
+- **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below).
 
 ## Keys
 
@@ -105,6 +106,18 @@ Typing long shell commands on the PicoCalc's keyboard is a chore. [Midnight Comm
 
 Its command line is still there at the bottom for when you need it, and F10 leaves it.
 
+### Moving files (ZMODEM)
+
+For a short script or a config file, there's no need for anything more than the terminal. Install lrzsz on the host once:
+
+    sudo apt install lrzsz
+
+**To the PicoCalc:** `sz deploy.sh` at the host's prompt. calcterm sees the transfer start and takes the file, into `/calcterm/files` on the card (replacing one of the same name); the bottom line shows how it's going, and says when it's there. Several files at once work too: `sz *.sh`.
+
+**From the PicoCalc:** `rz` at the host's prompt. calcterm opens a list of the card's files, starting in `/calcterm/files`: the arrows choose, Enter sends the file (or opens a folder), Backspace goes up a folder. The file arrives in the host's current folder, replacing one of the same name.
+
+Esc stops a transfer at any point, and in the list, sends nothing. A damaged packet is sent again, so a noisy line slows a transfer down rather than spoiling it. The line has to carry all eight bits (8N1, as it is unless changed in the setup menu).
+
 ### Other tests
 
 `vim`, `less`, `htop`, `top` and `vttest` are good ones (`vttest 32x64` at 64 columns; at 80 its own 80-column screens fit too).
@@ -122,7 +135,7 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 
 ## Tests
 
-`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel.
+`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel. `zmtest` sends files both ways between calcterm's ZMODEM and the real `sz` and `rz` (from lrzsz), on a clean line and on one that damages a byte now and then, and compares them byte for byte; `xfertest` does it through the PicoCalc side as well, the card, the keys and the file list.
 
 ## Built on
 
