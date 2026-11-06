@@ -108,7 +108,7 @@ Its command line is still there at the bottom for when you need it, and F10 leav
 
 ### Moving files (ZMODEM)
 
-For a short script or a config file, there's no need for anything more than the terminal. Install lrzsz on the host once:
+For a short script or a config file, there's no need for anything more than the terminal. The host needs lrzsz, which many Linux systems (Ubuntu among them) already have; if `sz` isn't found:
 
     sudo apt install lrzsz
 
