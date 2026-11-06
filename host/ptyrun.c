@@ -73,13 +73,16 @@ static size_t unescape(const char *s, char *o)
 	return n;
 }
 
+static int cols = 64;
+
 int main(int argc, char **argv)
 {
 	const char *term = "vt100";
 	double wait = 1.5;
 	char *keys[32];
 	int nkeys = 0, opt;
-	while ((opt = getopt(argc, argv, "+t:w:k:")) != -1) {
+	while ((opt = getopt(argc, argv, "+t:w:k:c:")) != -1) {
+		if (opt == 'c') { cols = atoi(optarg); continue; }
 		if (opt == 't') term = optarg;
 		else if (opt == 'w') wait = atof(optarg);
 		else if (opt == 'k' && nkeys < 32) keys[nkeys++] = optarg;
@@ -87,7 +90,8 @@ int main(int argc, char **argv)
 	if (optind >= argc) { fprintf(stderr, "usage: ptyrun [-t TERM] [-w S] [-k KEYS]... cmd\n"); return 2; }
 
 	vt_init(&t, out, NULL, NULL);
-	struct winsize ws = { VT_ROWS, VT_COLS, 0, 0 };
+	vt_set_cols(&t, cols);
+	struct winsize ws = { VT_ROWS, (unsigned short)cols, 0, 0 };
 	pid_t pid = forkpty(&master, NULL, NULL, &ws);
 	if (pid < 0) { perror("forkpty"); return 1; }
 	if (pid == 0) {
@@ -111,14 +115,14 @@ int main(int argc, char **argv)
 		pump(0.7);
 	}
 
-	printf("+%.*s+\n", VT_COLS, "----------------------------------------------------------------");
+	printf("+%.*s+\n", cols, "--------------------------------------------------------------------------------");
 	for (int r = 0; r < VT_ROWS; r++) {
-		char line[VT_COLS + 1];
+		char line[VT_MAX_COLS + 1];
 		vt_row_text(&t, r, line);
 		if (r == t.y) line[t.x] = line[t.x] == ' ' ? '_' : line[t.x];
 		printf("|%s|\n", line);
 	}
-	printf("+%.*s+\n", VT_COLS, "----------------------------------------------------------------");
+	printf("+%.*s+\n", cols, "--------------------------------------------------------------------------------");
 	kill(pid, SIGHUP);
 	waitpid(pid, NULL, 0);
 	return 0;

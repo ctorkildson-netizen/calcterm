@@ -116,13 +116,16 @@ static void write_ppm(const char *path)
 	fclose(f);
 }
 
+static int cols = 64;
+
 int main(int argc, char **argv)
 {
 	const char *term = "vt100", *ppm = NULL;
 	char *keys[32];
 	int nkeys = 0, opt;
 	const char *shotdir = NULL;
-	while ((opt = getopt(argc, argv, "+t:k:o:s:")) != -1) {
+	while ((opt = getopt(argc, argv, "+t:k:o:s:c:")) != -1) {
+		if (opt == 'c') { cols = atoi(optarg); continue; }
 		if (opt == 's') shotdir = optarg;
 		else if (opt == 't') term = optarg;
 		else if (opt == 'o') ppm = optarg;
@@ -132,7 +135,8 @@ int main(int argc, char **argv)
 	srand(1);
 	screen_init();
 	vt_init(&t, out, NULL, NULL);
-	struct winsize ws = { VT_ROWS, VT_COLS, 0, 0 };
+	vt_set_cols(&t, cols);
+	struct winsize ws = { VT_ROWS, (unsigned short)cols, 0, 0 };
 	pid_t pid = forkpty(&master, NULL, NULL, &ws);
 	if (pid == 0) {
 		setenv("TERM", term, 1);

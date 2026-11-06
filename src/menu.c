@@ -20,7 +20,7 @@
 #include "shot.h"
 
 #define BOX_W 46
-#define BOX_X ((VT_COLS - BOX_W) / 2)
+#define BOX_X ((64 - BOX_W) / 2)		/* in the 5x10 font's 64-column grid */
 #define BOX_Y 6
 #define FG 15
 #define BG 4
@@ -36,16 +36,17 @@ static const struct { int data, parity, stop; const char *name; } formats[] = {
 };
 #define NFORMATS (sizeof formats / sizeof formats[0])
 
-enum { I_PORT, I_SPEED, I_FORMAT, I_FLOW, I_ECHO, I_ENTER, I_BS,
+enum { I_PORT, I_SPEED, I_FORMAT, I_FLOW, I_ECHO, I_ENTER, I_BS, I_WIDTH,
        I_SHOT, I_BREAK, I_RESET, I_SAVE, I_LEAVE, I_COUNT };
 
 static const char *const names[I_COUNT] = {
 	"Port", "Speed", "Format", "Flow control", "Local echo", "Enter sends", "Backspace sends",
+	"Width",
 	"Take a screenshot (also Alt+F4)", "Send a break", "Reset the terminal", "Save these settings", "Quit to the PicoCalc's shell",
 };
 
 /* each item's key: pressing it does what Right or Enter would on that line */
-static const char hotkeys[I_COUNT + 1] = "psflenbtkrvq";
+static const char hotkeys[I_COUNT + 1] = "psflenbwtkrvq";
 
 static char note[BOX_W];
 
@@ -67,6 +68,7 @@ static const char *value(int i, char *b, size_t n)
 	case I_ECHO: return cfg.echo ? "on" : "off";
 	case I_ENTER: return cfg.newline ? "CR LF" : "CR";
 	case I_BS: return cfg.bs_del ? "DEL (^?)" : "BS (^H)";
+	case I_WIDTH: return cfg.cols == 80 ? "80 columns (Alt+F1)" : "64 columns (Alt+F1)";
 	}
 	return "";
 }
@@ -76,6 +78,7 @@ void apply_settings(vt *t)
 	t->local_echo = cfg.echo;
 	t->newline = cfg.newline;
 	t->bs_sends_del = cfg.bs_del;
+	vt_set_cols(t, cfg.cols);
 }
 
 static void change(vt *t, int i, int dir)
@@ -100,6 +103,7 @@ static void change(vt *t, int i, int dir)
 	case I_ECHO: cfg.echo = !cfg.echo; break;
 	case I_ENTER: cfg.newline = !cfg.newline; break;
 	case I_BS: cfg.bs_del = !cfg.bs_del; break;
+	case I_WIDTH: cfg.cols = cfg.cols == 80 ? 64 : 80; break;
 	default: return;
 	}
 	if (i <= I_FLOW) link_open(&cfg.link);

@@ -50,7 +50,7 @@ static int translate(uint8_t c)
 	case KEY_PAGE_DOWN: return VK_PGDN;
 	case KEY_DEL: return VK_DEL;
 	case KEY_INSERT: return VK_INS;
-	case KEY_F1: return VK_PF1;
+	case KEY_F1: return m_alt ? K_WIDTH : VK_PF1;	/* Alt+F1: 64 or 80 columns */
 	case KEY_F2: return VK_PF2;
 	case KEY_F3: return VK_PF3;
 	case KEY_F4: return m_alt ? K_SHOT : VK_PF4;	/* Alt+F4: a screenshot */
@@ -109,7 +109,7 @@ void keys_poll(void)
 			int k = translate(code);
 			sticky = false;			/* used, or cancelled by another key */
 			if (k < 0) continue;
-			if (m_alt && k != K_MENU && k != K_SHOT) k |= KF_ALT;
+			if (m_alt && k < 0x200) k |= KF_ALT;	/* (not on calcterm's own keys) */
 			kq_put(k);
 			held = code;
 			held_key = k;
@@ -122,7 +122,7 @@ void keys_poll(void)
 				held = 0;
 		}
 	}
-	if (held && held_key != K_MENU && held_key != K_BRK && held_key != K_SHOT && time_reached(next_repeat)) {
+	if (held && held_key < 0x200 && time_reached(next_repeat)) {	/* (calcterm's own keys don't repeat) */
 		kq_put(held_key);
 		next_repeat = make_timeout_time_ms(REPEAT_EVERY_MS);
 	}

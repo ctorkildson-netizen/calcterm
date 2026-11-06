@@ -49,7 +49,7 @@ static void sign_on(bool loaded)
 	static const char *const fmt[] = { "N", "O", "E" };
 	snprintf(b, sizeof b,
 		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal (" CALCTERM_BUILD ")\r\n"
-		 "%lu %d%s%d on %s%s.  Alt+F5: setup.\r\n\n",
+		 "%lu %d%s%d on %s%s.\r\nAlt+F5: setup.  Alt+F1: 64 or 80 columns.\r\n\n",
 		 (unsigned long)cfg.link.baud, cfg.link.data, fmt[cfg.link.parity], cfg.link.stop,
 		 cfg.link.port == PORT_GP45 ? "GP4/GP5" : "USB-C",
 		 loaded ? "" : " (the defaults)");
@@ -63,6 +63,7 @@ static void key(int k)
 	if (k == K_MENU) { menu_run(&term); return; }
 	if (k == K_BRK) { link_break(); return; }
 	if (k == K_SHOT) { screen_draw(&term, false); shot_take(&term); return; }
+	if (k == K_WIDTH) { cfg.cols = cfg.cols == 80 ? 64 : 80; apply_settings(&term); return; }
 	if (k >= 0x100) vt_key(&term, k);
 	else vt_key_char(&term, (uint8_t)k, alt);
 }
@@ -82,12 +83,19 @@ int main(void)
 	apply_settings(&term);
 	sign_on(loaded);
 
+	int shown_cols = term.cols;
 	absolute_time_t next_draw = get_absolute_time();
 	uint8_t buf[512];
 	for (;;) {
 		keys_poll();
 		int k;
 		while ((k = keys_get()) >= 0) key(k);
+		if (term.cols != shown_cols) {		/* the width changed: say how to tell the host */
+			shown_cols = term.cols;
+			char b[80];
+			snprintf(b, sizeof b, " %d columns. On the host: calcsize (or stty cols %d)", term.cols, term.cols);
+			screen_note(b, 4000);
+		}
 
 		/* what's come in, for up to a few milliseconds */
 		absolute_time_t until = make_timeout_time_ms(8);

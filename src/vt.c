@@ -14,7 +14,7 @@ enum { S_GROUND, S_ESC, S_ESC_INTER, S_CSI, S_STRING, S_STRING_ESC,
        S_VT52_ESC, S_VT52_Y1, S_VT52_Y2, S_UTF8 };
 
 /* the alternate screen (xterm's 1049): the main one is kept here */
-static vt_cell alt_save[VT_ROWS][VT_COLS];
+static vt_cell alt_save[VT_ROWS][VT_MAX_COLS];
 
 /* UTF-8 being put together */
 static uint32_t u_cp;
@@ -25,14 +25,16 @@ static int vt52_row;
 
 static void touch(vt *t, int row, int col)
 {
+	if (!t->dirty[row] || col < t->dlo[row]) t->dlo[row] = (uint8_t)col;
+	if (!t->dirty[row] || col > t->dhi[row]) t->dhi[row] = (uint8_t)col;
 	t->dirty[row] = true;
-	t->dirty_cols[row] |= (uint64_t)1 << col;
 }
 
 static void touch_row(vt *t, int row)
 {
 	t->dirty[row] = true;
-	t->dirty_cols[row] = ~(uint64_t)0;
+	t->dlo[row] = 0;
+	t->dhi[row] = (uint8_t)(t->cols - 1);
 }
 
 void vt_touch_all(vt *t)
@@ -68,14 +70,15 @@ static void scroll_up(vt *t, int top, int bot, int n)
 		/* the whole screen: the display can roll it, so carry the marks
 		   of what still has to be drawn along with the rows */
 		memmove(&t->dirty[0], &t->dirty[n], sizeof t->dirty[0] * (h - n));
-		memmove(&t->dirty_cols[0], &t->dirty_cols[n], sizeof t->dirty_cols[0] * (h - n));
+		memmove(&t->dlo[0], &t->dlo[n], sizeof t->dlo[0] * (h - n));
+		memmove(&t->dhi[0], &t->dhi[n], sizeof t->dhi[0] * (h - n));
 		t->hw_scroll += n;
 		if (t->hw_scroll >= VT_ROWS) vt_touch_all(t);
 	} else {
 		for (int r = top; r <= bot - n; r++) touch_row(t, r);
 	}
 	for (int r = bot - n + 1; r <= bot; r++) {
-		clear_cells(t, r, 0, VT_COLS);
+		clear_cells(t, r, 0, t->cols);
 		touch_row(t, r);
 	}
 }
@@ -87,7 +90,7 @@ static void scroll_down(vt *t, int top, int bot, int n)
 	if (n <= 0) return;
 	memmove(&t->cell[top + n], &t->cell[top], sizeof t->cell[0] * (h - n));
 	for (int r = top + n; r <= bot; r++) touch_row(t, r);
-	for (int r = top; r < top + n; r++) clear_cells(t, r, 0, VT_COLS);
+	for (int r = top; r < top + n; r++) clear_cells(t, r, 0, t->cols);
 }
 
 static int clamp(int v, int lo, int hi)
@@ -97,7 +100,7 @@ static int clamp(int v, int lo, int hi)
 
 static void move_to(vt *t, int x, int y)
 {
-	t->x = clamp(x, 0, VT_COLS - 1);
+	t->x = clamp(x, 0, t->cols - 1);
 	t->y = clamp(y, 0, VT_ROWS - 1);
 	t->wrapnext = false;
 }
@@ -190,13 +193,13 @@ static void put_glyph(vt *t, uint8_t ch)
 	t->wrapnext = false;
 	vt_cell *line = t->cell[t->y];
 	if (t->insert) {
-		memmove(&line[t->x + 1], &line[t->x], sizeof line[0] * (VT_COLS - 1 - t->x));
-		for (int c = t->x; c < VT_COLS; c++) touch(t, t->y, c);
+		memmove(&line[t->x + 1], &line[t->x], sizeof line[0] * (t->cols - 1 - t->x));
+		for (int c = t->x; c < t->cols; c++) touch(t, t->y, c);
 	}
 	vt_cell c = { ch, t->attr, t->fg, t->bg };
 	line[t->x] = c;
 	touch(t, t->y, t->x);
-	if (t->x == VT_COLS - 1) t->wrapnext = t->autowrap;
+	if (t->x == t->cols - 1) t->wrapnext = t->autowrap;
 	else t->x++;
 }
 
@@ -238,7 +241,7 @@ static void restore_cursor(vt *t)
 
 static void reset_tabs(vt *t)
 {
-	for (int c = 0; c < VT_COLS; c++) t->tabs[c] = c % 8 == 0 && c > 0;
+	for (int c = 0; c < t->cols; c++) t->tabs[c] = c % 8 == 0 && c > 0;
 }
 
 static void soft_reset(vt *t)		/* DECSTR, and part of RIS */
@@ -269,7 +272,7 @@ static void alt_screen(vt *t, bool on, bool keep_cursor)
 	if (on) {
 		if (keep_cursor) save_cursor(t);
 		memcpy(alt_save, t->cell, sizeof alt_save);
-		for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+		for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 	} else {
 		memcpy(t->cell, alt_save, sizeof alt_save);
 		if (keep_cursor) restore_cursor(t);
@@ -287,7 +290,7 @@ void vt_reset(vt *t)
 	on_alt = false;
 	soft_reset(t);
 	reset_tabs(t);
-	for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+	for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 	move_to(t, 0, 0);
 	vt_touch_all(t);
 }
@@ -295,6 +298,7 @@ void vt_reset(vt *t)
 void vt_init(vt *t, vt_out_fn out, vt_bell_fn bell, void *ctx)
 {
 	memset(t, 0, sizeof *t);
+	t->cols = 64;
 	t->out = out;
 	t->bell = bell;
 	t->ctx = ctx;
@@ -381,7 +385,7 @@ static void set_mode(vt *t, bool on)
 		case 1: t->cursor_keys = on; break;
 		case 2: if (!on) { t->ansi = false; t->state = S_GROUND; } break;	/* to VT52 */
 		case 3:		/* 80/132 columns: can't, but clear as the VT100 does */
-			for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+			for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 			t->top = 0; t->bot = VT_ROWS - 1;
 			move_to(t, 0, 0);
 			break;
@@ -422,22 +426,22 @@ static void csi_dispatch(vt *t, uint8_t f)
 	case 'J': {
 		int p = param(t, 0, 0);
 		if (p == 0) {
-			clear_cells(t, t->y, t->x, VT_COLS);
-			for (int r = t->y + 1; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+			clear_cells(t, t->y, t->x, t->cols);
+			for (int r = t->y + 1; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 		} else if (p == 1) {
-			for (int r = 0; r < t->y; r++) clear_cells(t, r, 0, VT_COLS);
+			for (int r = 0; r < t->y; r++) clear_cells(t, r, 0, t->cols);
 			clear_cells(t, t->y, 0, t->x + 1);
 		} else if (p == 2 || p == 3) {
-			for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+			for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 		}
 		t->wrapnext = false;
 		break;
 	}
 	case 'K': {
 		int p = param(t, 0, 0);
-		if (p == 0) clear_cells(t, t->y, t->x, VT_COLS);
+		if (p == 0) clear_cells(t, t->y, t->x, t->cols);
 		else if (p == 1) clear_cells(t, t->y, 0, t->x + 1);
-		else if (p == 2) clear_cells(t, t->y, 0, VT_COLS);
+		else if (p == 2) clear_cells(t, t->y, 0, t->cols);
 		t->wrapnext = false;
 		break;
 	}
@@ -449,24 +453,24 @@ static void csi_dispatch(vt *t, uint8_t f)
 		break;
 	case 'P': {
 		vt_cell *line = t->cell[t->y];
-		if (n > VT_COLS - t->x) n = VT_COLS - t->x;
-		memmove(&line[t->x], &line[t->x + n], sizeof line[0] * (VT_COLS - t->x - n));
-		for (int c = t->x; c < VT_COLS - n; c++) touch(t, t->y, c);
-		clear_cells(t, t->y, VT_COLS - n, VT_COLS);
+		if (n > t->cols - t->x) n = t->cols - t->x;
+		memmove(&line[t->x], &line[t->x + n], sizeof line[0] * (t->cols - t->x - n));
+		for (int c = t->x; c < t->cols - n; c++) touch(t, t->y, c);
+		clear_cells(t, t->y, t->cols - n, t->cols);
 		t->wrapnext = false;
 		break;
 	}
 	case '@': {
 		vt_cell *line = t->cell[t->y];
-		if (n > VT_COLS - t->x) n = VT_COLS - t->x;
-		memmove(&line[t->x + n], &line[t->x], sizeof line[0] * (VT_COLS - t->x - n));
-		for (int c = t->x + n; c < VT_COLS; c++) touch(t, t->y, c);
+		if (n > t->cols - t->x) n = t->cols - t->x;
+		memmove(&line[t->x + n], &line[t->x], sizeof line[0] * (t->cols - t->x - n));
+		for (int c = t->x + n; c < t->cols; c++) touch(t, t->y, c);
 		clear_cells(t, t->y, t->x, t->x + n);
 		t->wrapnext = false;
 		break;
 	}
 	case 'X':
-		clear_cells(t, t->y, t->x, t->x + n > VT_COLS ? VT_COLS : t->x + n);
+		clear_cells(t, t->y, t->x, t->x + n > t->cols ? t->cols : t->x + n);
 		t->wrapnext = false;
 		break;
 	case 'Z':				/* CBT: back n tab stops */
@@ -513,7 +517,7 @@ static void csi_dispatch(vt *t, uint8_t f)
 	case 't':
 		if (param(t, 0, 0) == 18) {	/* xterm: the text area's size */
 			char b[24];
-			snprintf(b, sizeof b, "\x1b[8;%d;%dt", VT_ROWS, VT_COLS);
+			snprintf(b, sizeof b, "\x1b[8;%d;%dt", VT_ROWS, t->cols);
 			say(t, b);
 		}
 		break;
@@ -554,7 +558,7 @@ static void esc_inter_dispatch(vt *t, uint8_t c)
 	else if (t->inter == '#' && c == '8') {	/* DECALN: fill with E's */
 		vt_cell e = { 'E', 0, C_DEF_FG, C_DEF_BG };
 		for (int r = 0; r < VT_ROWS; r++) {
-			for (int col = 0; col < VT_COLS; col++) t->cell[r][col] = e;
+			for (int col = 0; col < t->cols; col++) t->cell[r][col] = e;
 			touch_row(t, r);
 		}
 		t->top = 0; t->bot = VT_ROWS - 1;
@@ -576,10 +580,10 @@ static void vt52_dispatch(vt *t, uint8_t c)
 	case 'H': move_to(t, 0, 0); break;
 	case 'I': index_up(t); break;
 	case 'J':
-		clear_cells(t, t->y, t->x, VT_COLS);
-		for (int r = t->y + 1; r < VT_ROWS; r++) clear_cells(t, r, 0, VT_COLS);
+		clear_cells(t, t->y, t->x, t->cols);
+		for (int r = t->y + 1; r < VT_ROWS; r++) clear_cells(t, r, 0, t->cols);
 		break;
-	case 'K': clear_cells(t, t->y, t->x, VT_COLS); break;
+	case 'K': clear_cells(t, t->y, t->x, t->cols); break;
 	case 'Y': t->state = S_VT52_Y1; break;
 	case 'Z': say(t, "\x1b/Z"); break;
 	case '=': t->keypad_app = true; break;
@@ -599,8 +603,8 @@ static bool control(vt *t, uint8_t c)
 	case 0x08: if (t->x > 0) t->x--; t->wrapnext = false; return true;
 	case 0x09: {
 		int x = t->x + 1;
-		while (x < VT_COLS - 1 && !t->tabs[x]) x++;
-		t->x = x < VT_COLS ? x : VT_COLS - 1;
+		while (x < t->cols - 1 && !t->tabs[x]) x++;
+		t->x = x < t->cols ? x : t->cols - 1;
 		return true;
 	}
 	case 0x0A: case 0x0B: case 0x0C:
@@ -772,11 +776,32 @@ void vt_key(vt *t, int key)
 	}
 }
 
+/* ------------------------------------------------------------ the width */
+
+void vt_set_cols(vt *t, int cols)
+{
+	if (cols != 64 && cols != 80) return;
+	int old = t->cols;
+	if (cols == old) return;
+	t->cols = cols;
+	if (cols > old) {		/* the new columns, blank (they may hold old text) */
+		for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, old, cols);
+		if (on_alt)
+			for (int r = 0; r < VT_ROWS; r++)
+				for (int c = old; c < cols; c++) alt_save[r][c] = blank(t);
+	}
+	for (int c = old; c < cols; c++) t->tabs[c] = c % 8 == 0;
+	if (t->x > cols - 1) t->x = cols - 1;
+	if (t->saved.x > cols - 1) t->saved.x = cols - 1;
+	t->wrapnext = false;
+	vt_touch_all(t);
+}
+
 /* ------------------------------------------------------------ for the tests */
 
 void vt_row_text(const vt *t, int row, char *buf)
 {
-	for (int c = 0; c < VT_COLS; c++) {
+	for (int c = 0; c < t->cols; c++) {
 		uint8_t ch = t->cell[row][c].ch;
 		if (ch >= G_BASE && ch < G_BASE + 32) {
 			uint8_t d = ch - G_BASE + 0x5F;
@@ -784,5 +809,5 @@ void vt_row_text(const vt *t, int row, char *buf)
 		}
 		buf[c] = (char)ch;
 	}
-	buf[VT_COLS] = 0;
+	buf[t->cols] = 0;
 }

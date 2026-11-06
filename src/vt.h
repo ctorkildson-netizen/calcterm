@@ -13,7 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VT_COLS 64		/* 320 pixels of 5-pixel glyphs */
+#define VT_MAX_COLS 80		/* 320 pixels of 4-pixel glyphs; 64 of 5-pixel ones */
 #define VT_ROWS 32		/* 320 pixels of 10-pixel glyphs */
 
 /* attributes */
@@ -48,16 +48,17 @@ typedef struct {
 } vt_saved;
 
 typedef struct vt {
-	vt_cell cell[VT_ROWS][VT_COLS];
+	int cols;			/* 64 or 80 */
+	vt_cell cell[VT_ROWS][VT_MAX_COLS];
 	bool dirty[VT_ROWS];		/* a row with something to draw */
-	uint64_t dirty_cols[VT_ROWS];	/* which of its cells */
+	uint8_t dlo[VT_ROWS], dhi[VT_ROWS];	/* the first and last of its cells to draw */
 	int hw_scroll;			/* whole-screen scrolls up not yet drawn */
 
 	int x, y;			/* the cursor */
 	bool wrapnext;			/* at the right margin, with a character pending */
 	uint8_t attr, fg, bg;		/* for what's written next */
 	int top, bot;			/* the scrolling region, inclusive */
-	bool tabs[VT_COLS];
+	bool tabs[VT_MAX_COLS];
 	int gl;
 	char g[2];
 	vt_saved saved;
@@ -89,7 +90,7 @@ typedef struct vt {
 	void *ctx;
 } vt;
 
-void vt_init(vt *t, vt_out_fn out, vt_bell_fn bell, void *ctx);
+void vt_init(vt *t, vt_out_fn out, vt_bell_fn bell, void *ctx);	/* 64 columns */
 void vt_reset(vt *t);			/* RIS: the power-on state */
 void vt_input(vt *t, const uint8_t *s, size_t n);
 void vt_touch_all(vt *t);		/* draw it all again */
@@ -107,6 +108,7 @@ void vt_key(vt *t, int key);
 void vt_key_char(vt *t, uint8_t c, bool alt);	/* Alt: ESC first, as xterm's meta */
 
 /* for the tests: a row as text, the line-drawing set shown as '+', '-', '|' */
-void vt_row_text(const vt *t, int row, char *buf);	/* buf: VT_COLS + 1 */
+void vt_row_text(const vt *t, int row, char *buf);	/* buf: VT_MAX_COLS + 1 */
+void vt_set_cols(vt *t, int cols);	/* 64 or 80: what's on the screen stays where it is */
 
 #endif

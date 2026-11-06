@@ -20,9 +20,9 @@ static void fresh(void) { vt_init(&t, out, bell, NULL); nsaid = 0; said[0] = 0; 
 
 static void row_is(int line, int row, const char *want)
 {
-	char got[VT_COLS + 1], pad[VT_COLS + 1];
+	char got[VT_MAX_COLS + 1], pad[VT_MAX_COLS + 1];
 	vt_row_text(&t, row, got);
-	snprintf(pad, sizeof pad, "%-*s", VT_COLS, want);
+	snprintf(pad, sizeof pad, "%-*s", t.cols, want);
 	checks++;
 	if (strcmp(got, pad)) {
 		failures++;
@@ -60,17 +60,17 @@ int main(void)
 	IS("x", t.x, 5); IS("y", t.y, 1);
 
 	fresh();
-	for (int i = 0; i < VT_COLS; i++) feed("x");
-	IS("x at the margin", t.x, VT_COLS - 1); IS("still row 0", t.y, 0);
+	for (int i = 0; i < t.cols; i++) feed("x");
+	IS("x at the margin", t.x, t.cols - 1); IS("still row 0", t.y, 0);
 	feed("y");
 	ROW(1, "y"); IS("wrapped", t.y, 1);
 
 	fresh();
 	feed("\x1b[?7l");			/* no autowrap: overwrite the last column */
-	for (int i = 0; i < VT_COLS + 5; i++) feed("x");
+	for (int i = 0; i < t.cols + 5; i++) feed("x");
 	feed("Z");
 	IS("no wrap", t.y, 0);
-	IS("last col", t.cell[0][VT_COLS - 1].ch, 'Z');
+	IS("last col", t.cell[0][t.cols - 1].ch, 'Z');
 
 	/* scrolling the whole screen, and what's left to draw */
 	fresh();
@@ -87,7 +87,7 @@ int main(void)
 	feed("\x1b[2A\x1b[2D@");
 	IS("CUU/CUB", t.cell[3][2].ch, '@');
 	feed("\x1b[99;99H");
-	IS("clamped x", t.x, VT_COLS - 1); IS("clamped y", t.y, VT_ROWS - 1);
+	IS("clamped x", t.x, t.cols - 1); IS("clamped y", t.y, VT_ROWS - 1);
 
 	/* erasing */
 	fresh();
@@ -217,6 +217,31 @@ int main(void)
 	fresh();
 	feed("ab\x1b[\r2Cc");
 	ROW(0, "abc");
+
+	/* the width: 80 columns, and back */
+	fresh();
+	feed("left\x1b[1;60Hright");
+	vt_set_cols(&t, 80);
+	IS("80 wide", t.cols, 80);
+	ROW(0, "left                                                       right");
+	feed("\x1b[1;80HZ");
+	IS("col 80", t.cell[0][79].ch, 'Z');
+	feed("\x1b[999;999H\x1b[6n"); SAID("\x1b[32;80R");
+	feed("\x1b[18t"); SAID("\x1b[8;32;80t");
+	feed("\x1b[2;1H");
+	for (int i = 0; i < 81; i++) feed("w");
+	IS("wraps at 80", t.y, 2); IS("then column 2", t.x, 1);
+	feed("\x1b[3;1H\t\t\t\t\t\t\t\t\t*");
+	IS("tab stops past 64", t.cell[2][72].ch, '*');
+	vt_set_cols(&t, 64);
+	IS("64 again", t.cols, 64);
+	IS("cursor kept inside", t.x < 64, 1);
+	vt_set_cols(&t, 80);
+	IS("hidden text cleared on widening", t.cell[0][79].ch, ' ');
+	feed("\x1b[?1049h");			/* widening on the alternate screen */
+	vt_set_cols(&t, 64); vt_set_cols(&t, 80);
+	feed("\x1b[?1049l");
+	IS("main screen kept", t.cell[0][0].ch, 'l');
 
 	printf("%d checks, %d failed\n", checks, failures);
 	return failures != 0;

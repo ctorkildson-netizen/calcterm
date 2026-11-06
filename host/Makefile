@@ -13,11 +13,11 @@ test_vt: test_vt.c $(SRC)/vt.c $(SRC)/vt.h
 ptyrun: ptyrun.c $(SRC)/vt.c $(SRC)/vt.h
 	$(CC) $(CFLAGS) -o $@ ptyrun.c $(SRC)/vt.c -lutil
 
-screentest: screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c
-	$(CC) $(CFLAGS) -Istub -Istub/drivers -o $@ screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c -lutil
+screentest: screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c $(SRC)/font4.c
+	$(CC) $(CFLAGS) -Istub -Istub/drivers -o $@ screentest.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/shot.c $(SRC)/termfont.c $(SRC)/font4.c -lutil
 
-menutest: menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c
-	$(CC) $(CFLAGS) -std=gnu11 -Istub -Istub/drivers -DCALCTERM_BUILD='"test"' -DPICO_PROGRAM_VERSION_STRING='"0.1"' -o $@ menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c
+menutest: menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c
+	$(CC) $(CFLAGS) -std=gnu11 -Istub -Istub/drivers -DCALCTERM_BUILD='"test"' -DPICO_PROGRAM_VERSION_STRING='"0.2"' -o $@ menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c
 
 check: all
 	./screentest sh -c 'seq 1 2000; ls --color=always -la /usr/bin | head -40'
@@ -25,6 +25,11 @@ check: all
 	./screentest -k '1\r' -k '\r' -k '\r' vttest 32x64
 	./screentest -k q top -d 0.2
 	rm -rf shots && mkdir shots && ./screentest -t calcterm -s shots mc && rm -rf shots
+	./screentest -c 80 sh -c 'seq 1 2000; ls --color=always -la /usr/bin | head -40'
+	./screentest -c 80 -k 'Go\e:help\r' vim -u NONE -N -n
+	./screentest -c 80 -k '1\r' -k '\r' -k '\r' vttest 32x80
+	rm -rf shots && mkdir shots && ./screentest -c 80 -t calcterm -s shots mc && rm -rf shots
+	./menutest /dev/null
 
 clean:
 	rm -f test_vt ptyrun screentest menutest

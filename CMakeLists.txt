@@ -14,7 +14,7 @@ picocalc_fatfs(${MODULES}/picocalc-text-starter)	# the SD card, for the settings
 
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
-    src/settings.c src/shot.c src/termfont.c ${DRV}/font-8x10.c
+    src/settings.c src/shot.c src/termfont.c src/font4.c ${DRV}/font-8x10.c
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(calcterm PRIVATE
@@ -23,7 +23,7 @@ target_include_directories(calcterm PRIVATE
     ${DRV}
     ${MODULES}/picocalc-shell/include)
 pico_set_program_name(calcterm "calcterm")
-pico_set_program_version(calcterm "0.1")
+pico_set_program_version(calcterm "0.2")
 # which build this is, on the sign-on line and in the menu: the commit, and
 # its date (so two builds of the same version can be told apart on the PicoCalc)
 execute_process(COMMAND git log -1 --format=%h%x20%cs WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}

@@ -2,7 +2,7 @@
 
 A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and an FTP client are to follow.
 
-The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added, so boxes join up.
+The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added so boxes join up, or of 80 columns in calcterm's own 4×10 font. Alt+F1 switches between them.
 
 ## What it does
 
@@ -22,12 +22,13 @@ The screen is 64 columns by 32 rows, in Blair Leduc's 5×10 font with the VT100'
 | Alt + key | Esc then the key (meta) |
 | Ctrl tapped on its own | makes the next key a Ctrl key (a `^` shows in the top-right corner) |
 | Brk | a quarter-second break on the line |
+| Alt+F1 | 64 or 80 columns (then run `calcsize` on the host, below) |
 | Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, and a .txt of the screen's text) |
 | **Alt+F5** | **the setup menu** |
 
 ## The setup menu (Alt+F5)
 
-Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, and what Backspace sends. Each line has a highlighted letter that changes or does it in one key (P for the port, S the speed, T a screenshot, Q to quit calcterm for the PicoCalc's own shell, and so on); the arrow keys work too. Changes take effect at once. *Save these settings* writes them to `/calcterm/calcterm.cfg` on the card (a folder of its own, as the PicoCalc's programs keep theirs), a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and quits calcterm for the PicoCalc's shell (the host's session carries on, to be picked up next time).
+Port, speed, format (8N1, 7E1 and so on), XON/XOFF, local echo, what Enter sends, what Backspace sends, and the width. Each line has a highlighted letter that changes or does it in one key (P for the port, S the speed, W the width, T a screenshot, Q to quit calcterm for the PicoCalc's own shell, and so on); the arrow keys work too. Changes take effect at once. *Save these settings* writes them to `/calcterm/calcterm.cfg` on the card (a folder of its own, as the PicoCalc's programs keep theirs), a plain text file that can be edited by hand. The menu also sends a break, resets the terminal, and quits calcterm for the PicoCalc's shell (the host's session carries on, to be picked up next time).
 
 ## The serial ports
 
@@ -83,17 +84,17 @@ and put in
 
     sudo systemctl restart serial-getty@ttyUSB0.service
 
-and press Enter on the PicoCalc for the login prompt. After logging in, type this on the PicoCalc (it sets the size of the PicoCalc's own line; typed in a terminal on the Linux machine's screen it changes that one instead):
+and press Enter on the PicoCalc for the login prompt. A serial line doesn't tell Linux the screen's size, so it has to be set on the PicoCalc's line once you've logged in. `extras/calcsize.sh` does it by asking calcterm: it moves the cursor to the far corner, asks where it got to, and sets the size from the answer, so it's right at 64 columns or 80. Copy it to the Linux machine and add it to the end of `~/.bashrc`:
 
-    stty rows 32 cols 64
+    cat calcsize.sh >> ~/.bashrc
 
-To have it done at every login on that line, add this to `~/.bashrc` on the Linux machine:
+It runs by itself at each login on a serial line, and `calcsize` sets the size again after Alt+F1 changes the width. Without it, type on the PicoCalc (not on the Linux machine's own screen, which has a size of its own):
 
-    [ "$(tty)" = /dev/ttyUSB0 ] && stty rows 32 cols 64
+    stty rows 32 cols 64        # or cols 80
 
-If Midnight Commander's top line scrolls off the screen, or its key bar wraps, this is what's missing.
+If Midnight Commander's top line scrolls off the screen, or its key bar wraps, this is what's missing. Programs already running when the width changes carry on at the old one until they're restarted.
 
-(`resize`, from the xterm package, finds the size by asking the terminal.) If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
+If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
 
 ### Midnight Commander
 
@@ -106,7 +107,7 @@ Its command line is still there at the bottom for when you need it, and F10 leav
 
 ### Other tests
 
-`vim`, `less`, `htop`, `top` and `vttest 32x64` are good ones.
+`vim`, `less`, `htop`, `top` and `vttest` are good ones (`vttest 32x64` at 64 columns; at 80 its own 80-column screens fit too).
 
 ## Building
 

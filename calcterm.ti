@@ -7,8 +7,8 @@
 #
 # A VT100 with what calcterm adds: 16 colours, the line-drawing set, insert
 # and delete of characters and lines, the alternate screen, and F1-F10.
-# The size is the PicoCalc's screen; a program asks the tty first, so
-# `stty rows 32 cols 64` still matters for those that don't use terminfo.
+# The size given is 64 columns; at 80 (Alt+F1) the tty's size, which
+# programs ask first, says so: run calcsize (extras/calcsize.sh).
 calcterm|calcterm on the PicoCalc,
 	am, bce, mir, msgr, xenl, xon,
 	colors#16, cols#64, it#8, lines#32, pairs#256,
