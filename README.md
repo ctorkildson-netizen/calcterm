@@ -97,6 +97,16 @@ If Midnight Commander's top line scrolls off the screen, or its key bar wraps, t
 
 If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
 
+#### Log out before you leave
+
+A serial line can't tell Linux that the other end has gone. When calcterm quits (to start another program, say), or the cable or RS-232 box comes out, **the login stays open**, and whoever next opens that port, with any terminal program, is in your account without a password. Coming back to calcterm puts you straight back in the same session, which is handy, but it works for anyone.
+
+So log out (`exit`, or Ctrl+D) before leaving calcterm. As a safety net, have bash log out by itself after a while with nothing typed, on serial lines only, by adding this to `~/.bashrc` on the Linux machine:
+
+    case "$(tty)" in /dev/ttyUSB*|/dev/ttyACM*|/dev/ttyS*) TMOUT=900 ;; esac   # log out after 15 idle minutes
+
+It only counts time at the prompt: a long-running program (vim, mc, top) isn't interrupted.
+
 ### Midnight Commander
 
 Typing long shell commands on the PicoCalc's keyboard is a chore. [Midnight Commander](https://midnight-commander.org/) (`mc`) is a full-screen file manager in the style of Norton Commander: two directory panels, the arrow keys to move, Enter to open or run, and the function keys along the bottom to view, edit, copy, move, make folders and delete. It fits calcterm well, and makes the PicoCalc a comfortable way to look after another machine:
