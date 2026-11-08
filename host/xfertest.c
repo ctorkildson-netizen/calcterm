@@ -44,11 +44,21 @@ bool time_reached(absolute_time_t t) { return now_us() >= t; }
 
 /* the line: a pty with sz or rz on the other end */
 static int master = -1;
+/* the line's speed: 0 as fast as the pty goes, or a serial line's (8N1) */
+static unsigned baud;
+static uint64_t line_start, line_taken;
+static uint64_t now_us(void);
 size_t link_read(uint8_t *b, size_t m)
 {
+	if (baud) {			/* no more than the line could have carried so far */
+		uint64_t may = (now_us() - line_start) * baud / 10 / 1000000;
+		if (may <= line_taken) return 0;
+		if (m > may - line_taken) m = (size_t)(may - line_taken);
+	}
 	struct pollfd p = { master, POLLIN, 0 };
 	if (poll(&p, 1, 1) <= 0) return 0;
 	ssize_t n = read(master, b, m);
+	if (n > 0) line_taken += (uint64_t)n;
 	return n > 0 ? (size_t)n : 0;
 }
 void link_write(const uint8_t *s, size_t n) { while (n) { ssize_t w = write(master, s, n); if (w <= 0) return; s += w, n -= (size_t)w; } }
@@ -222,8 +232,11 @@ int main(int argc, char **argv)
 		fclose(f);
 		int before = 0;
 		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); for (char *c = row; *c; c++) before += *c != ' '; }
-		static const int stop[] = { WAIT - 3, VK_ESC, 0 };
+		static const int stop[] = { WAIT - 20, VK_ESC, 0 };	/* (two seconds in) */
 		script = stop; pos = 0;
+		baud = 115200;			/* as a real serial line: the host gets ahead of it */
+		line_start = now_us();
+		line_taken = 0;
 		char *szbig[] = { "sh", "-c", "sz big.bin; printf '\\r\\nPROMPT\\r\\n'", NULL };
 		host(szbig, host_dir);
 		int after = 0;
@@ -232,13 +245,48 @@ int main(int argc, char **argv)
 		snprintf(got, sizeof got, "%s" XFER_DIR "/big.bin", root);
 		check(access(got, F_OK) != 0, "sz, Esc: no half a file left on the card");
 		printf("  (printed characters on the screen: %d before, %d after)\n", before, after);
-		check(after - before < 120, "sz, Esc: nothing of the transfer on the screen");
+		baud = 0;
+		check(after - before <= 8, "sz, Esc: nothing of the transfer on the screen");	/* (sz's "rz", and PROMPT) */
 		bool prompt_ok = false;
 		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (strncmp(row, "PROMPT", 6) == 0) prompt_ok = true; }
 		if (!prompt_ok || getenv("SHOW"))
 			for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (row[0] != ' ' || row[1] != ' ') printf("  %2d |%s|\n", r + 1, row); }
 		check(prompt_ok, "sz, Esc: the shell's next line starts a line");
 		unlink(bigp);
+		script = NULL;
+	}
+
+	/* the same, from a host that sends its own cancel and then still the
+	   end of a block (as Chris's did: "h?" on the screen) */
+	{
+		char junk[300];
+		snprintf(junk, sizeof junk, "%s/junk.bin", host_dir);
+		FILE *f = fopen(junk, "wb");
+		srand(11);
+		for (int i = 0; i < 20000; i++) putc(rand() & 0xFF, f);		/* data in flight */
+		for (int i = 0; i < 10; i++) putc(0x18, f);			/* its cancel */
+		for (int i = 0; i < 10; i++) putc(0x08, f);
+		fputs("\x18h", f); putc(0x9C, f); putc(0x7A, f);		/* then a block's end: ZDLE h, CRC */
+		fclose(f);
+		int before = 0;
+		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); for (char *c = row; *c; c++) before += *c != ' '; }
+		static const int stop[] = { WAIT - 10, VK_ESC, 0 };
+		script = stop; pos = 0;
+		char *fake[] = { "sh", "-c", "printf 'rz\\r**\\030B00000000000000\\r\\n'; sleep 2; cat junk.bin; sleep 0.5; printf '\\r\\nPROMPT2\\r\\n'", NULL };
+		host(fake, host_dir);
+		int after = 0;
+		bool prompt_ok = false;
+		for (int r = 0; r < VT_ROWS; r++) {
+			char row[VT_MAX_COLS + 1];
+			vt_row_text(&term, r, row);
+			for (char *c = row; *c; c++) after += *c != ' ';
+			if (strncmp(row, "PROMPT2", 7) == 0) prompt_ok = true;
+		}
+		if (!prompt_ok || after - before > 9 || getenv("SHOW"))
+			for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (row[0] != ' ' || row[1] != ' ') printf("  %2d |%s|\n", r + 1, row); }
+		check(after - before <= 9, "Esc, a host that cancels and then ends its block: nothing of it on the screen");
+		check(prompt_ok, "Esc, a host that cancels and then ends its block: its prompt starts a line");
+		unlink(junk);
 		script = NULL;
 	}
 

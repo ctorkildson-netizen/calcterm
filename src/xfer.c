@@ -127,10 +127,11 @@ static zm_io io_for(xfer *x)
 }
 
 /* after Esc: the host had already sent more, and goes on until it sees
-   the cancel; none of that is for the screen.  It's over when the host
-   sends its own cancel (CANs, then backspaces), or the line goes quiet for
-   a second.  Text straight after the transfer's last binary byte is the
-   host's again (its prompt, say): that goes to the screen. */
+   the cancel; none of that is for the screen.  It can send its own cancel
+   and then still the end of a block, so nothing it sends is trusted until
+   the line has been quiet for a second and a half.  What it sent last, if
+   it's text that starts a line (or is too long to be chance), is the host
+   talking again, its prompt say: that goes to the screen. */
 static bool texty(uint8_t c)
 {
 	return (c >= 0x20 && c < 0x7F) || c == '\r' || c == '\n' || c == '\t' || c == 0x1B || c == 0x08 || c == 0x07;
@@ -143,33 +144,20 @@ static void drain(xfer *x)
 	absolute_time_t give_up = make_timeout_time_ms(30000);
 	static uint8_t tail[512];		/* the text at the end so far */
 	size_t n_tail = 0;
-	int cans = 0;
-	bool over = false;
 	x->n_rest = 0;
 	while (!time_reached(give_up)) {
 		while (x->at_buf < x->n_buf) {
 			uint8_t c = x->buf[x->at_buf++];
-			if (c == 0x18) { cans++; n_tail = 0; continue; }
-			if (cans >= 5 && c == 0x08) { over = true; n_tail = 0; continue; }
-			if (over) {			/* after the host's cancel: its own again */
-				x->at_buf--;
-				vt_input(x->t, x->buf + x->at_buf, x->n_buf - x->at_buf);
-				x->at_buf = x->n_buf;
-				return;
-			}
-			cans = 0;
-			if (!texty(c)) n_tail = 0;
+			if (!texty(c)) n_tail = 0;		/* (CANs included) */
 			else if (n_tail < sizeof tail) tail[n_tail++] = c;
 		}
-		absolute_time_t quiet = make_timeout_time_ms(1000);
+		absolute_time_t quiet = make_timeout_time_ms(1500);
 		size_t n;
 		while ((n = link_read(x->buf, sizeof x->buf)) == 0 && !time_reached(quiet)) {}
 		x->n_buf = n;
 		x->at_buf = 0;
 		if (n == 0) break;
 	}
-	/* the text at the end is the host's if it starts a line, or is too long
-	   to be a few printable bytes of the transfer by chance */
 	size_t from = 0;
 	while (from < n_tail && tail[from] != '\r' && tail[from] != '\n') from++;
 	if (from == n_tail) from = n_tail >= 6 ? 0 : n_tail;
