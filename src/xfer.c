@@ -26,6 +26,7 @@ typedef struct {
 	FIL file;
 	char path[FS_MAX_PATH_LEN];
 	bool sending;
+	bool stopped;			/* Esc was pressed */
 	absolute_time_t next_note, next_key;
 } xfer;
 
@@ -45,7 +46,7 @@ static int x_get(void *ctx, int ms)
 	for (;;) {
 		if (time_reached(x->next_key)) {	/* Esc (the keyboard is slow to ask: now and then) */
 			x->next_key = make_timeout_time_ms(100);
-			if (esc_pressed()) return ZM_CANCEL;
+			if (esc_pressed()) { x->stopped = true; return ZM_CANCEL; }
 		}
 		if (x->n_rest) { x->n_rest--; return *x->rest++; }
 		if (x->at_buf < x->n_buf) return x->buf[x->at_buf++];
@@ -125,6 +126,56 @@ static zm_io io_for(xfer *x)
 	return io;
 }
 
+/* after Esc: the host had already sent more, and goes on until it sees
+   the cancel; none of that is for the screen.  It's over when the host
+   sends its own cancel (CANs, then backspaces), or the line goes quiet for
+   a second.  Text straight after the transfer's last binary byte is the
+   host's again (its prompt, say): that goes to the screen. */
+static bool texty(uint8_t c)
+{
+	return (c >= 0x20 && c < 0x7F) || c == '\r' || c == '\n' || c == '\t' || c == 0x1B || c == 0x08 || c == 0x07;
+}
+
+static void drain(xfer *x)
+{
+	screen_note(" Stopping...", 60000);
+	screen_draw(x->t, false);
+	absolute_time_t give_up = make_timeout_time_ms(30000);
+	static uint8_t tail[512];		/* the text at the end so far */
+	size_t n_tail = 0;
+	int cans = 0;
+	bool over = false;
+	x->n_rest = 0;
+	while (!time_reached(give_up)) {
+		while (x->at_buf < x->n_buf) {
+			uint8_t c = x->buf[x->at_buf++];
+			if (c == 0x18) { cans++; n_tail = 0; continue; }
+			if (cans >= 5 && c == 0x08) { over = true; n_tail = 0; continue; }
+			if (over) {			/* after the host's cancel: its own again */
+				x->at_buf--;
+				vt_input(x->t, x->buf + x->at_buf, x->n_buf - x->at_buf);
+				x->at_buf = x->n_buf;
+				return;
+			}
+			cans = 0;
+			if (!texty(c)) n_tail = 0;
+			else if (n_tail < sizeof tail) tail[n_tail++] = c;
+		}
+		absolute_time_t quiet = make_timeout_time_ms(1000);
+		size_t n;
+		while ((n = link_read(x->buf, sizeof x->buf)) == 0 && !time_reached(quiet)) {}
+		x->n_buf = n;
+		x->at_buf = 0;
+		if (n == 0) break;
+	}
+	/* the text at the end is the host's if it starts a line, or is too long
+	   to be a few printable bytes of the transfer by chance */
+	size_t from = 0;
+	while (from < n_tail && tail[from] != '\r' && tail[from] != '\n') from++;
+	if (from == n_tail) from = n_tail >= 6 ? 0 : n_tail;
+	if (from < n_tail) vt_input(x->t, tail + from, n_tail - from);
+}
+
 static void finish(vt *t, const char *msg)
 {
 	/* the host's start ended its line ("rz waiting to receive."), but the
@@ -145,6 +196,7 @@ void xfer_receive(vt *t, const uint8_t *rest, size_t n)
 	screen_note(" Receiving a file (ZMODEM)...  Esc: stop", 60000);
 	screen_draw(t, false);
 	int got = zm_receive(&io, msg, sizeof msg);
+	if (x.stopped) drain(&x);
 	if (got > 1) snprintf(msg, sizeof msg, "%d files received, in " XFER_DIR, got);
 	finish(t, msg);
 }
@@ -298,5 +350,6 @@ void xfer_send(vt *t, const uint8_t *rest, size_t n)
 	screen_draw(t, false);
 	zm_send(&io, &x.file, name, size, mtime, msg, sizeof msg);
 	f_close(&x.file);
+	if (x.stopped) drain(&x);
 	finish(t, msg);
 }

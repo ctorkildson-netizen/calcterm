@@ -55,6 +55,8 @@ void link_write(const uint8_t *s, size_t n) { while (n) { ssize_t w = write(mast
 
 /* keys from a list; SNAP saves the screen; then nothing */
 #define SNAP -100
+#define WAIT -1000		/* WAIT - n: nothing for n asks of the keyboard */
+static int waited;
 static const int *script; static int pos;
 static const char *picture;
 static void save(const char *path);
@@ -63,6 +65,7 @@ int keys_get(void)
 {
 	if (!script || !script[pos]) return -1;
 	if (script[pos] == SNAP) { pos++; if (picture) save(picture); return -1; }
+	if (script[pos] <= WAIT) { if (++waited < WAIT - script[pos]) return -1; waited = 0; pos++; return keys_get(); }
 	return script[pos++];
 }
 bool keys_sticky(void) { return false; }
@@ -207,6 +210,37 @@ int main(int argc, char **argv)
 	screen_draw(&term, false);
 	check(bottom_says(" Sent deploy.sh (18 bytes)"), "rz: the bottom line says so");
 	check(screen_clean(), "rz: nothing left over on the screen");
+
+	/* sz of a big file, and Esc part way: nothing of it on the screen, no
+	   half a file on the card, and the shell's next line on a line of its own */
+	{
+		char bigp[300];
+		snprintf(bigp, sizeof bigp, "%s/big.bin", host_dir);
+		FILE *f = fopen(bigp, "wb");
+		srand(7);
+		for (int i = 0; i < 3000000; i++) putc(rand() & 0xFF, f);
+		fclose(f);
+		int before = 0;
+		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); for (char *c = row; *c; c++) before += *c != ' '; }
+		static const int stop[] = { WAIT - 3, VK_ESC, 0 };
+		script = stop; pos = 0;
+		char *szbig[] = { "sh", "-c", "sz big.bin; printf '\\r\\nPROMPT\\r\\n'", NULL };
+		host(szbig, host_dir);
+		int after = 0;
+		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); for (char *c = row; *c; c++) after += *c != ' '; }
+		char got[300];
+		snprintf(got, sizeof got, "%s" XFER_DIR "/big.bin", root);
+		check(access(got, F_OK) != 0, "sz, Esc: no half a file left on the card");
+		printf("  (printed characters on the screen: %d before, %d after)\n", before, after);
+		check(after - before < 120, "sz, Esc: nothing of the transfer on the screen");
+		bool prompt_ok = false;
+		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (strncmp(row, "PROMPT", 6) == 0) prompt_ok = true; }
+		if (!prompt_ok || getenv("SHOW"))
+			for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (row[0] != ' ' || row[1] != ' ') printf("  %2d |%s|\n", r + 1, row); }
+		check(prompt_ok, "sz, Esc: the shell's next line starts a line");
+		unlink(bigp);
+		script = NULL;
+	}
 
 	/* rz with the file already on the host */
 	write_file(p, "old\n", 4);
