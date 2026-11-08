@@ -110,14 +110,27 @@ static void host(char *const argv[], const char *dir)
 			if (s == ZM_SPOT_SEND) { xfer_send(&term, buf + i + 1, n - i - 1); done = true; break; }
 		}
 	}
-	for (int i = 0; i < 100; i++) {			/* let it finish */
-		if (waitpid(pid, NULL, WNOHANG) == pid) { pid = 0; break; }
+	for (int i = 0; i < 100; i++) {			/* let it finish; what follows goes to the screen */
 		uint8_t b[256];
 		struct pollfd p = { master, POLLIN, 0 };
-		if (poll(&p, 1, 50) > 0 && read(master, b, sizeof b) <= 0) {}
+		ssize_t n = 0;
+		if (poll(&p, 1, 50) > 0 && (n = read(master, b, sizeof b)) > 0) { vt_input(&term, b, (size_t)n); if (getenv("SHOW")) { fprintf(stderr, "after:"); for (ssize_t k = 0; k < n; k++) fprintf(stderr, " %02x", b[k]); fprintf(stderr, "\n"); } }
+		if (n <= 0 && pid && waitpid(pid, NULL, WNOHANG) == pid) pid = 0;
+		if (n <= 0 && !pid) break;		/* gone, and nothing more to read */
 	}
 	if (pid) { kill(pid, SIGKILL); waitpid(pid, NULL, 0); }
 	close(master);
+}
+
+/* nothing left over from the protocol on the screen */
+static bool screen_clean(void)
+{
+	for (int r = 0; r < VT_ROWS; r++) {
+		char row[VT_MAX_COLS + 1];
+		vt_row_text(&term, r, row);
+		if (strstr(row, "OO") || strchr(row, '?') || strstr(row, "**")) { printf("  (row %d: |%s|)\n", r + 1, row); return false; }
+	}
+	return true;
 }
 
 static bool same(const char *a, const char *b)
@@ -169,6 +182,7 @@ int main(int argc, char **argv)
 	check(same(p, q), "sz: the file arrives in " XFER_DIR);
 	screen_draw(&term, false);
 	check(bottom_says(" Received deploy.sh (37 bytes)"), "sz: the bottom line says so");
+	check(screen_clean(), "sz: nothing left over on the screen");
 
 	/* sz again: the same name replaces it */
 	write_file(p, "#!/bin/sh\necho v2\n", 18);
@@ -190,6 +204,7 @@ int main(int argc, char **argv)
 	check(same(p, q), "rz: the chosen file reaches the host");
 	screen_draw(&term, false);
 	check(bottom_says(" Sent deploy.sh (18 bytes)"), "rz: the bottom line says so");
+	check(screen_clean(), "rz: nothing left over on the screen");
 
 	/* rz with the file already on the host */
 	write_file(p, "old\n", 4);
@@ -208,6 +223,7 @@ int main(int argc, char **argv)
 	check(access(p, F_OK) != 0, "rz: Esc sends nothing");
 	screen_draw(&term, false);
 	check(bottom_says(" Nothing sent"), "rz: the bottom line says so");
+	check(term.x == 0 || term.y > 0, "rz: Esc leaves the cursor where it was");
 
 	char cmd[200];
 	snprintf(cmd, sizeof cmd, "rm -rf %s %s", root, host_dir);

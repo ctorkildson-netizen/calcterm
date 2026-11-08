@@ -406,7 +406,12 @@ int zm_receive(const zm_io *io, char *msg, size_t msg_size)
 		}
 		if (t == ZFIN) {
 			send_hex_pos(&l, ZFIN, 0);
-			for (int i = 0; i < 2 && get(&l, 500) == 'O'; i++) {}	/* "OO": over and out */
+			/* "OO": over and out, after the CR and LF that end its ZFIN */
+			for (int o = 0, n = 0; o < 2 && n < 8; n++) {
+				int c = get(&l, 500);
+				if (c < 0) break;
+				if (c == 'O') o++;
+			}
 			return files;
 		}
 		if (t == ZFREECNT) { send_hex_pos(&l, ZACK, 0x7FFFFFFF); continue; }
@@ -594,7 +599,14 @@ bool zm_send(const zm_io *io, void *f, const char *name, uint32_t size, uint32_t
 	for (int tries = 0; tries < 3; tries++) {
 		send_hex_pos(&l, ZFIN, 0);
 		t = get_header(&l, &h, 3000);
-		if (t == ZFIN || t == ERR_CANCEL) break;
+		if (t == ZFIN) {		/* (the CR and LF that end its header: not for the screen) */
+			for (int n = 0; n < 3; n++) {
+				int c = l.io->get(l.io->ctx, 200);
+				if (c != '\r' && c != '\n' && c != 0x8A) break;
+			}
+			break;
+		}
+		if (t == ERR_CANCEL) break;
 	}
 	raw(&l, 'O'); raw(&l, 'O');
 	flush(&l);

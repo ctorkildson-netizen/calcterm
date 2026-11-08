@@ -274,6 +274,13 @@ void xfer_send(vt *t, const uint8_t *rest, size_t n)
 	zm_io io = io_for(&x);
 	if (!chosen) {
 		zm_cancel(&io);
+		/* rz answers with CANs and backspaces: not for the screen */
+		absolute_time_t until = make_timeout_time_ms(1000);
+		while (!time_reached(until)) {
+			int c = x_get(&x, 50);
+			if (c == ZM_TIMEOUT || c == ZM_CANCEL) continue;
+			if (c != 0x18 && c != 0x08) { uint8_t b = (uint8_t)c; vt_input(t, &b, 1); break; }
+		}
 		finish(t, "Nothing sent");
 		return;
 	}
