@@ -272,7 +272,7 @@ int main(int argc, char **argv)
 		for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); for (char *c = row; *c; c++) before += *c != ' '; }
 		static const int stop[] = { WAIT - 10, VK_ESC, 0 };
 		script = stop; pos = 0;
-		char *fake[] = { "sh", "-c", "printf 'rz\\r**\\030B00000000000000\\r\\n'; sleep 2; cat junk.bin; sleep 0.5; printf '\\r\\nPROMPT2\\r\\n'", NULL };
+		char *fake[] = { "sh", "-c", "printf 'rz\\r**\\030B00000000000000\\r\\n'; sleep 2; cat junk.bin; sleep 0.5; printf '\\r\\nPROMPT2 $ '", NULL };
 		host(fake, host_dir);
 		int after = 0;
 		bool prompt_ok = false;
@@ -282,10 +282,15 @@ int main(int argc, char **argv)
 			for (char *c = row; *c; c++) after += *c != ' ';
 			if (strncmp(row, "PROMPT2", 7) == 0) prompt_ok = true;
 		}
-		if (!prompt_ok || after - before > 9 || getenv("SHOW"))
+		if (!prompt_ok || after - before > 10 || getenv("SHOW"))
 			for (int r = 0; r < VT_ROWS; r++) { char row[VT_MAX_COLS + 1]; vt_row_text(&term, r, row); if (row[0] != ' ' || row[1] != ' ') printf("  %2d |%s|\n", r + 1, row); }
-		check(after - before <= 9, "Esc, a host that cancels and then ends its block: nothing of it on the screen");
+		check(after - before <= 10, "Esc, a host that cancels and then ends its block: nothing of it on the screen");
 		check(prompt_ok, "Esc, a host that cancels and then ends its block: its prompt starts a line");
+		{
+			char row[VT_MAX_COLS + 1];
+			vt_row_text(&term, term.y, row);
+			check(strncmp(row, "PROMPT2 $ ", 10) == 0 && term.x == 10, "Esc: the cursor is left after the prompt, not below it");
+		}
 		unlink(junk);
 		script = NULL;
 	}

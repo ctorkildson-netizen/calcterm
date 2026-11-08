@@ -27,6 +27,8 @@ typedef struct {
 	char path[FS_MAX_PATH_LEN];
 	bool sending;
 	bool stopped;			/* Esc was pressed */
+	const uint8_t *kept;		/* the host's text after it, for the screen */
+	size_t n_kept;
 	absolute_time_t next_note, next_key;
 } xfer;
 
@@ -161,14 +163,17 @@ static void drain(xfer *x)
 	size_t from = 0;
 	while (from < n_tail && tail[from] != '\r' && tail[from] != '\n') from++;
 	if (from == n_tail) from = n_tail >= 6 ? 0 : n_tail;
-	if (from < n_tail) vt_input(x->t, tail + from, n_tail - from);
+	/* (it goes to the screen after the line is ended: see finish) */
+	x->kept = from < n_tail ? tail + from : NULL;
+	x->n_kept = n_tail - from;
 }
 
-static void finish(vt *t, const char *msg)
+static void finish(vt *t, const char *msg, const uint8_t *kept, size_t n_kept)
 {
 	/* the host's start ended its line ("rz waiting to receive."), but the
 	   transfer took that: end it here, so the prompt starts a new one */
 	if (t->x != 0) vt_input(t, (const uint8_t *)"\r\n", 2);
+	if (kept) vt_input(t, kept, n_kept);	/* then the host's prompt, after a stop */
 	char b[80];
 	snprintf(b, sizeof b, " %s", msg);
 	screen_note(b, 6000);
@@ -186,7 +191,7 @@ void xfer_receive(vt *t, const uint8_t *rest, size_t n)
 	int got = zm_receive(&io, msg, sizeof msg);
 	if (x.stopped) drain(&x);
 	if (got > 1) snprintf(msg, sizeof msg, "%d files received, in " XFER_DIR, got);
-	finish(t, msg);
+	finish(t, msg, x.kept, x.n_kept);
 }
 
 /* ------------------------------------------------------------ the picker */
@@ -324,12 +329,12 @@ void xfer_send(vt *t, const uint8_t *rest, size_t n)
 			if (c == ZM_TIMEOUT || c == ZM_CANCEL) continue;
 			if (c != 0x18 && c != 0x08) { uint8_t b = (uint8_t)c; vt_input(t, &b, 1); break; }
 		}
-		finish(t, "Nothing sent");
+		finish(t, "Nothing sent", NULL, 0);
 		return;
 	}
 	if (f_open(&x.file, path, FA_READ) != FR_OK) {
 		zm_cancel(&io);
-		finish(t, "Couldn't open that file");
+		finish(t, "Couldn't open that file", NULL, 0);
 		return;
 	}
 	const char *name = strrchr(path, '/');
@@ -339,5 +344,5 @@ void xfer_send(vt *t, const uint8_t *rest, size_t n)
 	zm_send(&io, &x.file, name, size, mtime, msg, sizeof msg);
 	f_close(&x.file);
 	if (x.stopped) drain(&x);
-	finish(t, msg);
+	finish(t, msg, x.kept, x.n_kept);
 }
