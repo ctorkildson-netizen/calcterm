@@ -127,6 +127,9 @@ static zm_io io_for(xfer *x)
 
 static void finish(vt *t, const char *msg)
 {
+	/* the host's start ended its line ("rz waiting to receive."), but the
+	   transfer took that: end it here, so the prompt starts a new one */
+	if (t->x != 0) vt_input(t, (const uint8_t *)"\r\n", 2);
 	char b[80];
 	snprintf(b, sizeof b, " %s", msg);
 	screen_note(b, 6000);

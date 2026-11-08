@@ -178,6 +178,7 @@ int main(int argc, char **argv)
 	write_file(p, "#!/bin/sh\nrsync -a build/ pico:/srv/\n", 37);
 	char *sz[] = { "sz", "deploy.sh", NULL };
 	host(sz, host_dir);
+	check(term.x == 0, "sz: the next output starts a new line");
 	snprintf(q, sizeof q, "%s" XFER_DIR "/deploy.sh", root);
 	check(same(p, q), "sz: the file arrives in " XFER_DIR);
 	screen_draw(&term, false);
@@ -199,6 +200,7 @@ int main(int argc, char **argv)
 	script = pick; pos = 0;
 	char *rz[] = { "rz", NULL };
 	host(rz, host_dir);
+	check(term.x == 0, "rz: the next output starts a new line");
 	snprintf(p, sizeof p, "%s/deploy.sh", host_dir);
 	snprintf(q, sizeof q, "%s" XFER_DIR "/deploy.sh", root);
 	check(same(p, q), "rz: the chosen file reaches the host");
