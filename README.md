@@ -85,7 +85,18 @@ and put in
 
     sudo systemctl restart serial-getty@ttyUSB0.service
 
-and press Enter on the PicoCalc for the login prompt. A serial line doesn't tell Linux the screen's size, so it has to be set on the PicoCalc's line once you've logged in. `extras/calcsize.sh` does it by asking calcterm: it moves the cursor to the far corner, asks where it got to, and sets the size from the answer, so it's right at 64 columns or 80. Copy it to the Linux machine and add it to the end of `~/.bashrc`:
+and press Enter on the PicoCalc for the login prompt.
+
+Over the USB-C cable, `ttyUSB0` is the PicoCalc's own USB chip, so it goes away whenever the PicoCalc is unplugged or switched off, and the login with it; when it comes back, nothing starts the login again. A udev rule does that, every time the port appears:
+
+    sudo tee /etc/udev/rules.d/99-calcterm-getty.rules <<'EOF'
+    ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyUSB0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="serial-getty@ttyUSB0.service"
+    EOF
+    sudo udevadm control --reload
+
+(A USB-to-RS-232 adapter on the Linux machine stays plugged in, so it doesn't need this.)
+
+A serial line doesn't tell Linux the screen's size, so it has to be set on the PicoCalc's line once you've logged in. `extras/calcsize.sh` does it by asking calcterm: it moves the cursor to the far corner, asks where it got to, and sets the size from the answer, so it's right at 64 columns or 80. Copy it to the Linux machine and add it to the end of `~/.bashrc`:
 
     cat calcsize.sh >> ~/.bashrc
 
