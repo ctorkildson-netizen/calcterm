@@ -135,7 +135,7 @@ For a short script or a config file, there's no need for anything more than the 
 
 **To the PicoCalc:** `sz deploy.sh` at the host's prompt. calcterm sees the transfer start and takes the file, into `/calcterm/files` on the card (replacing one of the same name); the bottom line shows how it's going, and says when it's there. Several files at once work too: `sz *.sh`.
 
-**From the PicoCalc:** `rz` at the host's prompt. calcterm opens a list of the card's files, starting in `/calcterm/files`: the arrows choose, Enter sends the file (or opens a folder), Backspace goes up a folder. The file arrives in the host's current folder, replacing one of the same name.
+**From the PicoCalc:** `rz` at the host's prompt. calcterm opens a list of the card's files, starting in `/calcterm/files`: the arrows choose, Enter sends the file (or opens a folder), Backspace goes up a folder. The file arrives in the host's current folder, replacing one of the same name. The bottom line says "Sent" as soon as it's there; the host's prompt can take another two or three seconds to come back while rz closes up.
 
 **BOTH WAYS, A FILE OF THE SAME NAME IS REPLACED WITHOUT ASKING:** on the card by `sz`, and in the host's folder by `rz`. That's deliberate (it's for small files, sent back and forth while you work on them), but there's no undo.
 

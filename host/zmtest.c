@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 #include "../src/zmodem.h"
 
@@ -210,7 +211,10 @@ static void send(const char *what, const char *name)
 			struct stat st;
 			stat(path, &st);
 			char msg[96];
+			struct timespec t0, t1; clock_gettime(CLOCK_MONOTONIC, &t0);
 			sent = zm_send(&io, f, name, (uint32_t)st.st_size, (uint32_t)st.st_mtime, msg, sizeof msg);
+			clock_gettime(CLOCK_MONOTONIC, &t1);
+			if (getenv("TIMING")) printf("  (zm_send took %.2f s; data done at %ld bytes)\n", (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9, last_progress);
 			fclose(f);
 			printf("  (%s)\n", msg);
 		}
