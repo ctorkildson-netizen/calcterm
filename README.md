@@ -137,6 +137,19 @@ For a short script or a config file, there's no need for anything more than the 
 
 **From the PicoCalc:** `rz` at the host's prompt. calcterm opens a list of the card's files, starting in `/calcterm/files`: the arrows choose, Enter sends the file (or opens a folder), Backspace goes up a folder. The file arrives in the host's current folder, replacing one of the same name.
 
+**BOTH WAYS, A FILE OF THE SAME NAME IS REPLACED WITHOUT ASKING:** on the card by `sz`, and in the host's folder by `rz`. That's deliberate (it's for small files, sent back and forth while you work on them), but there's no undo.
+
+It's a serial line, so it's for small files. At 115200 (calcterm's speed unless you've changed it), roughly:
+
+| File | Takes |
+| --- | --- |
+| a script, 10 KB | about a second |
+| 100 KB | about 10 seconds |
+| 1 MB | about 1½ minutes |
+| 10 MB | about 15 minutes |
+
+At 9600 it's twelve times as long. For anything big, the card in a reader or FTP is the better way.
+
 Esc stops a transfer at any point, and in the list, sends nothing. A damaged packet is sent again, so a noisy line slows a transfer down rather than spoiling it. The line has to carry all eight bits (8N1, as it is unless changed in the setup menu).
 
 ### Other tests

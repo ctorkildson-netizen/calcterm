@@ -32,10 +32,13 @@ uint16_t lcd_mem[FRAME_HEIGHT][WIDTH]; int lcd_offset; static uint16_t lcd_bg;
 void lcd_set_background(uint16_t c) { lcd_bg = c; }
 void lcd_enable_cursor(bool on) { (void)on; }
 void lcd_define_scrolling(uint16_t a, uint16_t b) { (void)a; (void)b; }
-void lcd_blit(const uint16_t *px, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { for (int r = 0; r < h; r++) for (int c = 0; c < w; c++) lcd_mem[y + r][x + c] = px[r * w + c]; }
-void lcd_solid_rectangle(uint16_t col, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { for (int r = 0; r < h; r++) for (int c = 0; c < w; c++) lcd_mem[y + r][x + c] = col; }
-void lcd_clear_screen(void) { lcd_solid_rectangle(lcd_bg, 0, 0, WIDTH, HEIGHT); }
-void lcd_scroll_up(void) {}
+/* the display as the real one: drawing is on the screen as shown, and
+   scrolling rolls what's there up a line (as screentest.c) */
+void lcd_blit(const uint16_t *px, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { for (int r = 0; r < h; r++) for (int c = 0; c < w; c++) lcd_mem[(lcd_offset + y + r) % FRAME_HEIGHT][x + c] = px[r * w + c]; }
+void lcd_solid_rectangle(uint16_t col, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { for (int r = 0; r < h; r++) for (int c = 0; c < w; c++) lcd_mem[(lcd_offset + y + r) % FRAME_HEIGHT][x + c] = col; }
+void lcd_clear_screen(void) { lcd_offset = 0; lcd_solid_rectangle(lcd_bg, 0, 0, WIDTH, HEIGHT); }
+void lcd_scroll_up(void) { lcd_offset = (lcd_offset + 10) % FRAME_HEIGHT; lcd_solid_rectangle(lcd_bg, 0, HEIGHT - 10, WIDTH, 10); }
+static uint16_t shown(int x, int y) { return lcd_mem[(lcd_offset + y) % FRAME_HEIGHT][x]; }
 
 static uint64_t now_us(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (uint64_t)t.tv_sec * 1000000 + (uint64_t)t.tv_nsec / 1000; }
 absolute_time_t get_absolute_time(void) { return now_us(); }
@@ -85,7 +88,7 @@ static void save(const char *path)
 	FILE *f = fopen(path, "wb");
 	fprintf(f, "P6\n%d %d\n255\n", WIDTH, HEIGHT);
 	for (int y = 0; y < HEIGHT; y++) for (int x = 0; x < WIDTH; x++) {
-		uint16_t p = lcd_mem[y][x]; uint8_t c[3] = { (uint8_t)((p >> 11) << 3), (uint8_t)(((p >> 5) & 63) << 2), (uint8_t)((p & 31) << 3) };
+		uint16_t p = shown(x, y); uint8_t c[3] = { (uint8_t)((p >> 11) << 3), (uint8_t)(((p >> 5) & 63) << 2), (uint8_t)((p & 31) << 3) };
 		fwrite(c, 1, 3, f);
 	}
 	fclose(f);
@@ -155,16 +158,15 @@ static bool same(const char *a, const char *b)
 
 static bool bottom_says(const char *s)
 {
-	/* the note is drawn over the bottom row: read it back from the LCD by
-	   comparing with the text drawn on its own */
+	/* the note is drawn over the bottom row: compare what's shown there
+	   with the text drawn on its own */
 	static uint16_t keep[10][WIDTH];
-	memcpy(keep, &lcd_mem[310], sizeof keep);
+	for (int y = 0; y < 10; y++) for (int x = 0; x < WIDTH; x++) keep[y][x] = shown(x, 310 + y);
 	screen_text(0, 31, s, 0, 11);
 	bool ok = true;
 	for (int y = 0; y < 10; y++)
 		for (int x = 0; x < (int)strlen(s) * 5 && x < WIDTH; x++)
-			ok &= lcd_mem[310 + y][x] == keep[y][x];
-	memcpy(&lcd_mem[310], keep, sizeof keep);
+			ok &= shown(x, 310 + y) == keep[y][x];
 	return ok;
 }
 
@@ -209,6 +211,9 @@ int main(int argc, char **argv)
 	snprintf(q, sizeof q, "%s" XFER_DIR "/sub", root);
 	mkdir(q, 0777);
 	unlink(p);
+	while (term.y < VT_ROWS - 1) vt_input(&term, (const uint8_t *)"\r\n", 2);	/* (at the bottom: the end scrolls) */
+	vt_input(&term, (const uint8_t *)"chris@mini:~$ rz", 16);
+	screen_draw(&term, false);
 	static const int pick[] = { SNAP, VK_DOWN, VK_DOWN, VK_ENTER, 0 };	/* "..", sub/, deploy.sh: folders first */
 	script = pick; pos = 0;
 	char *rz[] = { "rz", NULL };
@@ -219,6 +224,14 @@ int main(int argc, char **argv)
 	check(same(p, q), "rz: the chosen file reaches the host");
 	screen_draw(&term, false);
 	check(bottom_says(" Sent deploy.sh (18 bytes)"), "rz: the bottom line says so");
+	{	/* and the message goes away by itself, as the main loop draws */
+		absolute_time_t until = make_timeout_time_ms(7000);
+		while (!time_reached(until)) { screen_draw(&term, false); usleep(20000); }
+		int yellow = 0;
+		for (int y = 0; y < 320; y++) for (int x = 0; x < WIDTH; x++) yellow += shown(x, y) == RGB(255, 255, 90);
+		if (yellow) printf("  (%d yellow pixels left on the screen)\n", yellow);
+		check(yellow == 0, "rz: the message on the bottom line goes away by itself");
+	}
 	check(screen_clean(), "rz: nothing left over on the screen");
 
 	/* sz of a big file, and Esc part way: nothing of it on the screen, no
