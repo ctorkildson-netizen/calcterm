@@ -14,6 +14,9 @@
 /* called now and then while connecting, with what's happening; false stops it */
 typedef bool (*net_progress)(const char *what, void *ctx);
 
+/* start the radio (once), for Wi-Fi's country from /ntp/ntp.cfg; Bluetooth
+   shares it, so calcterm starts it this way before Bluetooth does */
+bool net_radio(void);
 /* join the network if need be, then connect; false, with why, if not */
 bool net_connect(const char *host, uint16_t port, net_progress progress, void *ctx,
 		 char *why, size_t why_size);

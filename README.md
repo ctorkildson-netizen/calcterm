@@ -11,6 +11,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **What Linux sends anyway**: the 16 colours (256-colour and RGB requests are matched to the nearest of them), bold, underline, reverse, the alternate screen that `vim`, `less` and `htop` use, and UTF-8. Box-drawing characters arrive as UTF-8 from most programs today and are shown with the line-drawing glyphs; other non-ASCII characters show as `?`.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
 - **Telnet over Wi-Fi** (Pico 2 W), to hosts kept in a list on the card (below).
+- **A Bluetooth keyboard** alongside the PicoCalc's own (Pico 2 W).
 - **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below), over serial or telnet.
 
 ## Keys
@@ -84,6 +85,10 @@ Or choose *Type an address...* in the list: `192.168.1.50`, or `bbs.example.org:
 That's all: it installs a small inetd that answers on port 23 and starts a login for each connection. Log in as yourself (Ubuntu doesn't allow root over telnet).
 
 Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. SSH, which encrypts, is planned.
+
+## A Bluetooth keyboard (Pico 2 W)
+
+Pair the keyboard once with `btpair` from [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras) (2.3 or later). After that calcterm finds it by itself: the sign-on says which keyboard it's waiting for, and pressing a key on it connects it ("Keyboard: ... connected" on the bottom line). Both keyboards work at once, and every key does on the Bluetooth one what it does on the PicoCalc's, Alt+F1 to Alt+F5 included. A Bluetooth keyboard works with telnet's Wi-Fi on at the same time; they share the radio.
 
 ## Trying it with Linux
 
@@ -190,7 +195,7 @@ Esc stops a transfer at any point, and in the list, sends nothing. A damaged pac
 
 ## Building
 
-With the Pico SDK (2.2.0) and `arm-none-eabi-gcc`:
+With `arm-none-eabi-gcc` and a Pico SDK newer than 2.2.0: the Bluetooth keyboard needs the BTstack on the SDK's `develop` branch, which has the host for BLE keyboards (2.2.0's doesn't).
 
     git clone --recurse-submodules https://github.com/ctorkildson-netizen/calcterm
     cd calcterm
@@ -207,7 +212,8 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 
 - [picocalc-text-starter](https://github.com/BlairLeduc/picocalc-text-starter) (Blair Leduc): the LCD, keyboard and SD card drivers, and the font.
 - [picocalc-shell](https://github.com/BlairLeduc/picocalc-shell) (Blair Leduc): returning to the shell, and reading `/ntp/ntp.cfg` for Wi-Fi.
-- The Pico SDK's CYW43 driver and lwIP: Wi-Fi and TCP for telnet.
+- [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras)' btkbd: the Bluetooth keyboard.
+- The Pico SDK's CYW43 driver, lwIP and BTstack: Wi-Fi and TCP for telnet, and Bluetooth.
 - [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras): building FatFs for the card.
 
 These are git submodules pinned to release tags; Dependabot proposes new releases as pull requests.

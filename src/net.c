@@ -81,11 +81,11 @@ static void on_dns(const char *name, const ip_addr_t *ip, void *arg)
 
 /* ------------------------------------------------------------ joining */
 
-static bool join(net_progress progress, void *ctx, char *why, size_t n)
-{
-	if (radio_on && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP) return true;
+static ntp_config_t wc;
 
-	static ntp_config_t wc;
+/* /ntp/ntp.cfg into wc; false, with why, if it isn't there or has a mistake */
+static bool read_cfg(char *why, size_t n)
+{
 	FIL f;
 	if (f_open(&f, NTP_CFG_PATH, FA_READ) != FR_OK) {
 		snprintf(why, n, "No %s: the Wi-Fi network goes there (see the README)", NTP_CFG_PATH);
@@ -97,21 +97,34 @@ static bool join(net_progress progress, void *ctx, char *why, size_t n)
 	f_close(&f);
 	unsigned line = 0;
 	ntp_cfg_status_t st = ntp_config_parse(&wc, text, got, &line);
-	if (st != NTP_CFG_OK) {
-		if (line) snprintf(why, n, "%s line %u: %s", NTP_CFG_PATH, line, ntp_cfg_status_str(st));
-		else snprintf(why, n, "%s: %s", NTP_CFG_PATH, ntp_cfg_status_str(st));
-		return false;
-	}
+	if (st == NTP_CFG_OK) return true;
+	if (line) snprintf(why, n, "%s line %u: %s", NTP_CFG_PATH, line, ntp_cfg_status_str(st));
+	else snprintf(why, n, "%s: %s", NTP_CFG_PATH, ntp_cfg_status_str(st));
+	return false;
+}
 
+bool net_radio(void)
+{
+	if (radio_on) return true;
+	char why[80];
+	bool have = read_cfg(why, sizeof why);		/* (for Wi-Fi's country; worldwide without) */
+	uint32_t country = have && wc.country[0] ? CYW43_COUNTRY(wc.country[0], wc.country[1], 0) : CYW43_COUNTRY_WORLDWIDE;
+	if (cyw43_arch_init_with_country(country)) return false;
+	cyw43_arch_enable_sta_mode();
+	radio_on = true;
+	return true;
+}
+
+static bool join(net_progress progress, void *ctx, char *why, size_t n)
+{
+	if (radio_on && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP) return true;
+	if (!read_cfg(why, n)) return false;
 	if (!radio_on) {
 		if (!progress("Starting Wi-Fi...", ctx)) { snprintf(why, n, "Stopped."); return false; }
-		uint32_t country = wc.country[0] ? CYW43_COUNTRY(wc.country[0], wc.country[1], 0) : CYW43_COUNTRY_WORLDWIDE;
-		if (cyw43_arch_init_with_country(country)) {
+		if (!net_radio()) {
 			snprintf(why, n, "No Wi-Fi on this board (calcterm's telnet needs a Pico 2 W)");
 			return false;
 		}
-		cyw43_arch_enable_sta_mode();
-		radio_on = true;
 	}
 
 	char msg[64];
