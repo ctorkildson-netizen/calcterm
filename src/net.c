@@ -204,6 +204,9 @@ bool net_connect(const char *host, uint16_t port, net_progress progress, void *c
 
 void net_close(void)
 {
+	connected = false;
+	head = tail = unacked = 0;
+	if (!radio_on) return;			/* (nothing to close, and no lwIP to lock yet) */
 	cyw43_arch_lwip_begin();
 	struct tcp_pcb *p = pcb;
 	pcb = NULL;
@@ -214,8 +217,6 @@ void net_close(void)
 		if (tcp_close(p) != ERR_OK) tcp_abort(p);
 	}
 	cyw43_arch_lwip_end();
-	connected = false;
-	head = tail = unacked = 0;
 }
 
 bool net_open(void)
@@ -239,7 +240,7 @@ size_t net_read(uint8_t *buf, size_t max)
 	uint32_t h = head;
 	while (k < max && tail != h) buf[k++] = ring[tail++ & (RING - 1)];
 	unacked += k;
-	if (unacked >= 512 || (unacked && head == tail)) {	/* open the window again */
+	if (radio_on && (unacked >= 512 || (unacked && head == tail))) {	/* open the window again */
 		cyw43_arch_lwip_begin();
 		if (pcb) tcp_recved(pcb, (u16_t)unacked);
 		cyw43_arch_lwip_end();
