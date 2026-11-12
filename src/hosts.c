@@ -71,12 +71,13 @@ static void draw(int sel, int top, int items, bool connected)
 	screen_fill(0, 0, 64, 32, BG);
 	screen_text(1, 0, "Connect by telnet", 11, BG);
 	screen_text(1, 1, "Wi-Fi from /ntp/ntp.cfg   the list: " HOSTS_PATH, 7, BG);
+	snprintf(b, sizeof b, " %-16s %-36s %6s", "Name", "Address", "Port");
+	screen_text(1, LIST_TOP - 1, b, 11, BG);
 	if (!n_hosts) screen_text(3, LIST_TOP, "(no hosts listed yet)", 7, BG);
 	for (int r = 0; r < LIST_ROWS && top + r < items; r++) {
 		int i = top + r;
 		if (i < n_hosts) {
-			if (list[i].port == 23) snprintf(b, sizeof b, " %-16.16s %-43.43s", list[i].name, list[i].host);
-			else snprintf(b, sizeof b, " %-16.16s %-36.36s %6u", list[i].name, list[i].host, list[i].port);
+			snprintf(b, sizeof b, " %-16.16s %-36.36s %6u", list[i].name, list[i].host, list[i].port);
 		} else if (i == n_hosts) snprintf(b, sizeof b, " Type an address...");
 		else snprintf(b, sizeof b, " Hang up (back to the serial port)");
 		snprintf(b + strlen(b), sizeof b - strlen(b), "%*s", 62 - (int)strlen(b), "");
