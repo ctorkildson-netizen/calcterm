@@ -287,13 +287,14 @@ void net_write(const uint8_t *s, size_t n)
 
 void net_leave(void)
 {
-	if (!radio_on) return;
+	if (!wifi_on) return;			/* (the radio may be on for Bluetooth alone) */
 	net_close();
 	/* tell the router we've gone: without it, it keeps the PicoCalc's old
 	   connection for a minute or so, and turns away the next program that
 	   joins (the dots, then "retrying") until that runs out */
 	cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
 	sleep_ms(200);				/* (time for the message to go) */
+	wifi_on = false;
 }
 
 const char *net_address(void)
