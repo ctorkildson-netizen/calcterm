@@ -167,6 +167,14 @@ static void key(int k)
 	if (k == K_SHOT) { screen_draw(&term, false); shot_take(&term); return; }
 	if (k == K_WIDTH) { cfg.cols = cfg.cols == 80 ? 64 : 80; apply_settings(&term); return; }
 	if (k == K_HOSTS) { hosts(); return; }
+	if (k == K_BTDIAG) {			/* (testing) Bluetooth's state, into the terminal's text */
+		char b[200];
+		if (!bt) snprintf(b, sizeof b, "\r\n[Bluetooth not started]\r\n");
+		else snprintf(b, sizeof b, "\r\n[%s | %s | %s]\r\n[%s]\r\n", btkbd_status(), btkbd_diag(),
+			      btkbd_trace_line(0), btkbd_trace_line(1));
+		local(b);
+		return;
+	}
 	if (k >= 0x100) vt_key(&term, k);
 	else vt_key_char(&term, (uint8_t)k, alt);
 }

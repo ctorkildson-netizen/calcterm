@@ -110,14 +110,15 @@ bool net_radio(void)
 	bool have = read_cfg(why, sizeof why);		/* (for Wi-Fi's country; worldwide without) */
 	uint32_t country = have && wc.country[0] ? CYW43_COUNTRY(wc.country[0], wc.country[1], 0) : CYW43_COUNTRY_WORLDWIDE;
 	if (cyw43_arch_init_with_country(country)) return false;
-	cyw43_arch_enable_sta_mode();
 	radio_on = true;
 	return true;
 }
 
+static bool wifi_on;			/* the radio's Wi-Fi side switched on (at the first connection) */
+
 static bool join(net_progress progress, void *ctx, char *why, size_t n)
 {
-	if (radio_on && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP) return true;
+	if (wifi_on && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP) return true;
 	if (!read_cfg(why, n)) return false;
 	if (!radio_on) {
 		if (!progress("Starting Wi-Fi...", ctx)) { snprintf(why, n, "Stopped."); return false; }
@@ -125,6 +126,10 @@ static bool join(net_progress progress, void *ctx, char *why, size_t n)
 			snprintf(why, n, "No Wi-Fi on this board (calcterm's telnet needs a Pico 2 W)");
 			return false;
 		}
+	}
+	if (!wifi_on) {
+		cyw43_arch_enable_sta_mode();
+		wifi_on = true;
 	}
 
 	char msg[64];
