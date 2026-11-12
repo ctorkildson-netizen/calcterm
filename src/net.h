@@ -26,6 +26,8 @@ bool net_closed_by_host(void);		/* the host hung up (or the line dropped) */
 size_t net_read(uint8_t *buf, size_t max);
 size_t net_waiting(void);
 void net_write(const uint8_t *s, size_t n);	/* waits for room, as a serial line would */
-const char *net_address(void);		/* ours, once joined: "192.168.1.23" */
+const char *net_address(void);
+/* leave the network properly, so the next program can join straight away */
+void net_leave(void);		/* ours, once joined: "192.168.1.23" */
 
 #endif
