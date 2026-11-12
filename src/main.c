@@ -1,9 +1,10 @@
 /* main.c -- calcterm: a VT100 terminal for the PicoCalc.
  *
- * For now the line is the serial port: UART0, which the PicoCalc's USB-C
- * socket carries through its CH340, or UART1 on GP4/GP5 for a level shifter
- * to RS-232.  Telnet, SSH and SFTP are to come.  Files go both ways by
- * ZMODEM (xfer.c), started from the host with sz or rz.
+ * The line is the serial port (UART0, which the PicoCalc's USB-C socket
+ * carries through its CH340, or UART1 on GP4/GP5 for a level shifter to
+ * RS-232), or telnet over Wi-Fi on a Pico 2 W, picked from a host list
+ * with Alt+F2.  SSH and SFTP are to come.  Files go both ways by ZMODEM
+ * (xfer.c), started from the host with sz or rz, over either.
  *
  * The loop takes what's arrived and feeds it to the terminal, and draws
  * what's changed: at once when the line goes quiet, and otherwise every
@@ -24,6 +25,7 @@
 #include "shot.h"
 #include "xfer.h"
 #include "zmodem.h"
+#include "hosts.h"
 
 #define DRAW_EVERY_MS 40
 
@@ -73,11 +75,54 @@ static void sign_on(bool loaded)
 	static const char *const fmt[] = { "N", "O", "E" };
 	snprintf(b, sizeof b,
 		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal (" CALCTERM_BUILD ")\r\n"
-		 "%lu %d%s%d on %s%s.\r\nAlt+F5: setup.  Alt+F1: 64 or 80 columns.\r\n\n",
+		 "%lu %d%s%d on %s%s.\r\nAlt+F5: setup.  Alt+F1: 64 or 80 columns.  Alt+F2: telnet.\r\n\n",
 		 (unsigned long)cfg.link.baud, cfg.link.data, fmt[cfg.link.parity], cfg.link.stop,
 		 cfg.link.port == PORT_GP45 ? "GP4/GP5" : "USB-C",
 		 loaded ? "" : " (the defaults)");
 	local(b);
+}
+
+/* while connecting: what's happening on the bottom line; Esc stops it */
+static bool progress(const char *what, void *ctx)
+{
+	(void)ctx;
+	char b[72];
+	snprintf(b, sizeof b, " %.58s  (Esc: stop)", what);
+	screen_note(b, 30000);
+	screen_draw(&term, false);
+	keys_poll();
+	int k;
+	while ((k = keys_get()) >= 0)
+		if ((k & ~KF_ALT) == VK_ESC) return false;
+	return true;
+}
+
+static void hosts(void)
+{
+	char host[HOST_LEN], name[24], b[160];
+	uint16_t port;
+	int what = hosts_pick(link_is_telnet(), host, &port, name);
+	vt_touch_all(&term);			/* the terminal back */
+	screen_draw(&term, false);
+	if (what == HOSTS_HANG_UP) {
+		link_hangup();
+		local("\r\n[Hung up. Back on the serial port.]\r\n");
+		screen_note(" Hung up.", 2000);
+		return;
+	}
+	if (what != HOSTS_CONNECT) return;
+	char why[96];
+	bool was = link_is_telnet();
+	if (!link_telnet(host, port, progress, NULL, "calcterm", term.cols, VT_ROWS, why, sizeof why)) {
+		snprintf(b, sizeof b, " %.62s", why);
+		screen_note(b, 8000);
+		if (was) local("\r\n[Hung up. Back on the serial port.]\r\n");
+		return;
+	}
+	hosts_remember(host, port);
+	snprintf(b, sizeof b, "\r\n[Connected to %.40s. Alt+F2: hang up.]\r\n", name);
+	local(b);
+	screen_note(" Connected.", 2000);
 }
 
 static void key(int k)
@@ -88,6 +133,7 @@ static void key(int k)
 	if (k == K_BRK) { link_break(); return; }
 	if (k == K_SHOT) { screen_draw(&term, false); shot_take(&term); return; }
 	if (k == K_WIDTH) { cfg.cols = cfg.cols == 80 ? 64 : 80; apply_settings(&term); return; }
+	if (k == K_HOSTS) { hosts(); return; }
 	if (k >= 0x100) vt_key(&term, k);
 	else vt_key_char(&term, (uint8_t)k, alt);
 }
@@ -114,11 +160,22 @@ int main(void)
 		keys_poll();
 		int k;
 		while ((k = keys_get()) >= 0) key(k);
-		if (term.cols != shown_cols) {		/* the width changed: say how to tell the host */
+		if (term.cols != shown_cols) {		/* the width changed: tell the host, or say how */
 			shown_cols = term.cols;
 			char b[80];
-			snprintf(b, sizeof b, " %d columns. On the host: calcsize (or stty cols %d)", term.cols, term.cols);
+			if (link_is_telnet()) {
+				link_size(term.cols, VT_ROWS);
+				snprintf(b, sizeof b, " %d columns (the host has been told).", term.cols);
+			} else
+				snprintf(b, sizeof b, " %d columns. On the host: calcsize (or stty cols %d)", term.cols, term.cols);
 			screen_note(b, 4000);
+		}
+		/* telnet: the host echoes, or (if it says it won't) calcterm does */
+		term.local_echo = link_is_telnet() ? !link_host_echoes() : cfg.echo;
+		if (link_dropped()) {
+			link_hangup();
+			local("\r\n[The host hung up. Back on the serial port; Alt+F2 to connect again.]\r\n");
+			screen_note(" Connection closed.", 4000);
 		}
 
 		/* what's come in, for up to a few milliseconds */

@@ -3,7 +3,7 @@
 CFLAGS = -std=c11 -Wall -Wextra -g -fsanitize=address,undefined
 SRC = ../src
 
-all: test_vt ptyrun screentest menutest zmtest xfertest
+all: test_vt ptyrun screentest menutest zmtest xfertest tntest
 	./test_vt
 	./menutest /dev/null
 
@@ -21,6 +21,9 @@ zmtest: zmtest.c $(SRC)/zmodem.c $(SRC)/zmodem.h
 
 xfertest: xfertest.c $(SRC)/xfer.c $(SRC)/zmodem.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c
 	$(CC) $(CFLAGS) -std=gnu11 -Istub -Istub/drivers -o $@ xfertest.c $(SRC)/xfer.c $(SRC)/zmodem.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c -lutil
+
+tntest: tntest.c $(SRC)/telnet.c $(SRC)/telnet.h $(SRC)/zmodem.c
+	$(CC) $(CFLAGS) -std=gnu11 -o $@ tntest.c $(SRC)/telnet.c $(SRC)/zmodem.c
 
 menutest: menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c
 	$(CC) $(CFLAGS) -std=gnu11 -Istub -Istub/drivers -DCALCTERM_BUILD='"test"' -DPICO_PROGRAM_VERSION_STRING='"0.3"' -o $@ menutest.c $(SRC)/menu.c $(SRC)/vt.c $(SRC)/screen.c $(SRC)/termfont.c $(SRC)/font4.c

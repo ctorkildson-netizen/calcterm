@@ -1,6 +1,6 @@
 # calcterm
 
-A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and SFTP are to follow.
+A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). It talks over a serial line, or by telnet over Wi-Fi; SSH and SFTP are to follow.
 
 The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added so boxes join up, or of 80 columns in calcterm's own 4×10 font. Alt+F1 switches between them.
 
@@ -10,7 +10,8 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **VT52 mode**, entered and left as the VT100 does (`ESC [ ? 2 l`, `ESC <`).
 - **What Linux sends anyway**: the 16 colours (256-colour and RGB requests are matched to the nearest of them), bold, underline, reverse, the alternate screen that `vim`, `less` and `htop` use, and UTF-8. Box-drawing characters arrive as UTF-8 from most programs today and are shown with the line-drawing glyphs; other non-ASCII characters show as `?`.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
-- **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below).
+- **Telnet over Wi-Fi** (Pico 2 W), to hosts kept in a list on the card (below).
+- **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below), over serial or telnet.
 
 ## Keys
 
@@ -23,7 +24,8 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 | Alt + key | Esc then the key (meta) |
 | Ctrl tapped on its own | makes the next key a Ctrl key (a `^` shows in the top-right corner) |
 | Brk | a quarter-second break on the line |
-| Alt+F1 | 64 or 80 columns (then run `calcsize` on the host, below) |
+| Alt+F1 | 64 or 80 columns (then, on a serial line, run `calcsize` on the host, below; telnet tells the host itself) |
+| Alt+F2 | telnet: the host list, to connect or hang up |
 | Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, and a .txt of the screen's text) |
 | **Alt+F5** | **the setup menu** |
 
@@ -52,6 +54,36 @@ Boards differ in how they label TX and RX. Most name the direction of the signal
 To check the PicoCalc's half on its own, bridge pins 2 and 3 of the board's DB9 socket: with local echo off, what you type should come back. From the board's DB9 to a PC is a null-modem connection (both ends are terminals).
 
 XON/XOFF is on by default: if the PicoCalc falls behind (it has a 16 KB buffer), it asks the host to pause.
+
+## Telnet (Pico 2 W)
+
+Alt+F2 opens a list of hosts. Pick one and calcterm joins the Wi-Fi network, connects, and the line is telnet until you hang up (Alt+F2 again) or the host does; then it's back on the serial port. Esc stops a connection that's taking too long.
+
+**The Wi-Fi network** is the one in `/ntp/ntp.cfg`, the file the PicoCalc shell's `NTP` command uses, so it's set up in one place. If you don't have it yet, write it with the shell's EDIT (or vi):
+
+    ssid     = Home                 # the network's name
+    password = "my # password"      # left out for an open network
+    country  = US                   # Wi-Fi's country; worldwide if left out
+
+calcterm only reads it. (The shell's user guide has the details: quotes, comments, the `timeout` line.)
+
+**The host list** is `/calcterm/hosts`, a line for each host: a name, its address, and the port if it isn't 23. `#` starts a comment.
+
+    # name     address          port
+    mini       192.168.1.50
+    bbs        bbs.example.org  2323
+
+Or choose *Type an address...* in the list: `192.168.1.50`, or `bbs.example.org:2323`. One that connects is added to the file for next time. Names are looked up by DNS; names ending in `.local` aren't, so use the address for those.
+
+**What telnet tells the host:** the terminal type (`calcterm`, so install the terminfo entry below on the host), and the screen's size, again whenever Alt+F1 changes it, so `calcsize` isn't needed over telnet. The host echoes what you type; one that says it won't gets calcterm's own echo. ZMODEM works over telnet just as over serial.
+
+**A telnet server on Ubuntu:**
+
+    sudo apt install telnetd
+
+That's all: it installs a small inetd that answers on port 23 and starts a login for each connection. Log in as yourself (Ubuntu doesn't allow root over telnet).
+
+Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. SSH, which encrypts, is planned.
 
 ## Trying it with Linux
 
@@ -169,12 +201,13 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 
 ## Tests
 
-`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel. `zmtest` sends files both ways between calcterm's ZMODEM and the real `sz` and `rz` (from lrzsz), on a clean line and on one that damages a byte now and then, and compares them byte for byte; `xfertest` does it through the PicoCalc side as well, the card, the keys and the file list.
+`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel. `zmtest` sends files both ways between calcterm's ZMODEM and the real `sz` and `rz` (from lrzsz), on a clean line and on one that damages a byte now and then, and compares them byte for byte; `xfertest` does it through the PicoCalc side as well, the card, the keys and the file list. `tntest` runs calcterm's telnet against a real telnetd (started by `tnserve.py`): the terminal type and screen size the host is given, 255 bytes in the data, and ZMODEM both ways over the connection.
 
 ## Built on
 
 - [picocalc-text-starter](https://github.com/BlairLeduc/picocalc-text-starter) (Blair Leduc): the LCD, keyboard and SD card drivers, and the font.
-- [picocalc-shell](https://github.com/BlairLeduc/picocalc-shell) (Blair Leduc): returning to the shell.
+- [picocalc-shell](https://github.com/BlairLeduc/picocalc-shell) (Blair Leduc): returning to the shell, and reading `/ntp/ntp.cfg` for Wi-Fi.
+- The Pico SDK's CYW43 driver and lwIP: Wi-Fi and TCP for telnet.
 - [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras): building FatFs for the card.
 
 These are git submodules pinned to release tags; Dependabot proposes new releases as pull requests.

@@ -9,3 +9,4 @@ host/menutest
 build-fonttest/
 host/zmtest
 host/xfertest
+host/tntest
