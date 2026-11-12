@@ -83,7 +83,7 @@ static void draw(int sel, int top, int items, bool connected)
 		screen_text(1, LIST_TOP + (i < n_hosts ? r : r + 1), b, i == sel ? 0 : FG, i == sel ? 11 : BG);
 	}
 	(void)connected;
-	screen_text(1, 30, "Enter: connect   Esc: back to the terminal", 7, BG);
+	screen_text(1, 30, "Enter: connect   or just type an address   Esc: back", 7, BG);
 }
 
 /* a line typed on the bottom row; false: Esc */
@@ -133,7 +133,10 @@ int hosts_pick(bool connected, char *host, uint16_t *port, char *name)
 		if ((k == VK_DOWN || k == VK_TAB) && sel < items - 1) sel++;
 		if (k == VK_HOME) sel = 0;
 		if (k == VK_END) sel = items - 1;
-		if (k != VK_ENTER && k != VK_RIGHT) continue;
+		/* typing starts an address, wherever the bar is */
+		bool typing = k >= 0x20 && k < 0x7f;
+		if (typing) sel = n_hosts;
+		else if (k != VK_ENTER && k != VK_RIGHT) continue;
 		if (sel < n_hosts) {
 			snprintf(host, HOST_LEN, "%s", list[sel].host);
 			*port = list[sel].port;
@@ -142,7 +145,8 @@ int hosts_pick(bool connected, char *host, uint16_t *port, char *name)
 		}
 		if (sel > n_hosts) return HOSTS_HANG_UP;
 		static char typed[HOST_LEN + 8];
-		typed[0] = 0;
+		typed[0] = typing ? (char)k : 0;
+		typed[1] = 0;
 		if (!ask("Address (:port if not 23): ", typed, sizeof typed)) continue;
 		char copy[sizeof typed];
 		strcpy(copy, typed);
