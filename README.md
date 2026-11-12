@@ -9,6 +9,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **VT100**, after the VT100 User Guide: cursor movement, erasing, scrolling regions, origin mode, tab stops, insert and delete of characters and lines, double-height lines excepted. It answers the host's questions (DA, DSR, the cursor-position report).
 - **VT52 mode**, entered and left as the VT100 does (`ESC [ ? 2 l`, `ESC <`).
 - **What Linux sends anyway**: the 16 colours (256-colour and RGB requests are matched to the nearest of them), bold, underline, reverse, the alternate screen that `vim`, `less` and `htop` use, and UTF-8. Box-drawing characters arrive as UTF-8 from most programs today and are shown with the line-drawing glyphs; other non-ASCII characters show as `?`.
+- **ANSI art**, as BBSes draw it: the block characters (full, half and quarter blocks, and the three shades) are drawn as shapes that join up cell to cell, whether they come as UTF-8 or in the IBM PC's own character set (code page 437), which many boards still send. Bytes that can't be UTF-8 are taken as the PC's.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
 - **Telnet over Wi-Fi** (Pico 2 W), to hosts kept in a list on the card (below).
 - **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below), over serial or telnet.

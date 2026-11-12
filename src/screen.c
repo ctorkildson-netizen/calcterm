@@ -47,9 +47,29 @@ void screen_init(void)
 	lcd_enable_cursor(false);
 }
 
+/* a block element or shade (vt.h), cw pixels wide, drawn as a shape so
+   neighbouring cells join up */
+static void block(uint16_t *buf, int w, int px, int cw, uint8_t ch, uint16_t fg, uint16_t bg)
+{
+	for (int r = 0; r < GH; r++) {
+		uint16_t *p = buf + r * w + px;
+		for (int x = 0; x < cw; x++) {
+			bool on;
+			if (ch < G_SHADE) {
+				int q = (r < GH / 2 ? 0 : 2) + (x < (cw + 1) / 2 ? 0 : 1);
+				on = ((ch - G_BLOCK) >> q) & 1;
+			} else if (ch == G_SHADE) on = (x & 1) == 0 && (r & 1) == 0;		/* light */
+			else if (ch == G_SHADE + 1) on = ((x + r) & 1) == 0;			/* medium */
+			else on = !((x & 1) == 1 && (r & 1) == 1);			/* dark */
+			p[x] = on ? fg : bg;
+		}
+	}
+}
+
 /* one cell of the 4x10 font into the strip */
 static void glyph4(uint16_t *buf, int w, int px, uint8_t ch, uint16_t fg, uint16_t bg, bool under)
 {
+	if (ch >= G_BLOCK && ch < G_END) { block(buf, w, px, 4, ch, fg, bg); return; }
 	const uint8_t *g = font4[ch < 160 ? ch : '?'];
 	for (int r = 0; r < GH; r++) {
 		uint8_t bits = g[r];
@@ -65,6 +85,7 @@ static void glyph4(uint16_t *buf, int w, int px, uint8_t ch, uint16_t fg, uint16
 /* one cell into the strip, whose width is w pixels, at pixel column px */
 static void glyph(uint16_t *buf, int w, int px, uint8_t ch, uint16_t fg, uint16_t bg, bool under)
 {
+	if (ch >= G_BLOCK && ch < G_END) { block(buf, w, px, 5, ch, fg, bg); return; }
 	const uint8_t *g = &font_term.glyphs[ch * GH];
 	if (ch >= G_BASE + 32) g = &font_term.glyphs['?' * GH];
 	for (int r = 0; r < GH; r++) {

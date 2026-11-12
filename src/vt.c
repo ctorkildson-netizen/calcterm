@@ -19,6 +19,8 @@ static vt_cell alt_save[VT_ROWS][VT_MAX_COLS];
 /* UTF-8 being put together */
 static uint32_t u_cp;
 static int u_left;
+static uint8_t u_raw[4];		/* the sequence's bytes so far, for the CP437 fallback */
+static int u_n;
 static int vt52_row;
 
 /* ------------------------------------------------------------ the screen */
@@ -126,6 +128,19 @@ static void index_up(vt *t)		/* RI */
 
 /* ------------------------------------------------------------ writing */
 
+/* The IBM PC's character set (code page 437), 0x80-0xFF, in Unicode: BBS
+   art is often sent in it rather than UTF-8. */
+static const uint16_t cp437[128] = {
+	0x00C7, 0x00FC, 0x00E9, 0x00E2, 0x00E4, 0x00E0, 0x00E5, 0x00E7, 0x00EA, 0x00EB, 0x00E8, 0x00EF, 0x00EE, 0x00EC, 0x00C4, 0x00C5,
+	0x00C9, 0x00E6, 0x00C6, 0x00F4, 0x00F6, 0x00F2, 0x00FB, 0x00F9, 0x00FF, 0x00D6, 0x00DC, 0x00A2, 0x00A3, 0x00A5, 0x20A7, 0x0192,
+	0x00E1, 0x00ED, 0x00F3, 0x00FA, 0x00F1, 0x00D1, 0x00AA, 0x00BA, 0x00BF, 0x2310, 0x00AC, 0x00BD, 0x00BC, 0x00A1, 0x00AB, 0x00BB,
+	0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, 0x2555, 0x2563, 0x2551, 0x2557, 0x255D, 0x255C, 0x255B, 0x2510,
+	0x2514, 0x2534, 0x252C, 0x251C, 0x2500, 0x253C, 0x255E, 0x255F, 0x255A, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256C, 0x2567,
+	0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256B, 0x256A, 0x2518, 0x250C, 0x2588, 0x2584, 0x258C, 0x2590, 0x2580,
+	0x03B1, 0x00DF, 0x0393, 0x03C0, 0x03A3, 0x03C3, 0x00B5, 0x03C4, 0x03A6, 0x0398, 0x03A9, 0x03B4, 0x221E, 0x03C6, 0x03B5, 0x2229,
+	0x2261, 0x00B1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00F7, 0x2248, 0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0, 0x00A0,
+};
+
 /* the DEC Special Graphics set, from Unicode, for hosts that send UTF-8 */
 static int from_unicode(uint32_t u)
 {
@@ -141,7 +156,21 @@ static int from_unicode(uint32_t u)
 	case 0x2264: return G_BASE + 0x79 - 0x5F;	/* ≤ */
 	case 0x2265: return G_BASE + 0x7A - 0x5F;	/* ≥ */
 	case 0x25C6: case 0x2666: return G_BASE + 0x60 - 0x5F;	/* ◆ */
-	case 0x2591: case 0x2592: case 0x2593: return G_BASE + 0x61 - 0x5F;	/* ▒ */
+	/* block elements: halves, eighths (as the nearest half), quarters, shades */
+	case 0x2580: case 0x2594: return G_BLOCK + 3;		/* ▀ ▔ */
+	case 0x2581: case 0x2582: case 0x2583: case 0x2584: return G_BLOCK + 12;	/* ▁ to ▄ */
+	case 0x2585: case 0x2586: case 0x2587: case 0x2588: case 0x2589: case 0x258A: case 0x258B:
+	case 0x25A0: case 0x25AE: return G_BLOCK + 15;		/* █ and its near neighbours, ■ */
+	case 0x258C: case 0x258D: case 0x258E: case 0x258F: return G_BLOCK + 5;	/* ▌ to ▏ */
+	case 0x2590: case 0x2595: return G_BLOCK + 10;		/* ▐ ▕ */
+	case 0x2596: return G_BLOCK + 4;	case 0x2597: return G_BLOCK + 8;
+	case 0x2598: return G_BLOCK + 1;	case 0x2599: return G_BLOCK + 13;
+	case 0x259A: return G_BLOCK + 9;	case 0x259B: return G_BLOCK + 7;
+	case 0x259C: return G_BLOCK + 11;	case 0x259D: return G_BLOCK + 2;
+	case 0x259E: return G_BLOCK + 6;	case 0x259F: return G_BLOCK + 14;
+	case 0x2591: return G_SHADE;		/* ░ */
+	case 0x2592: return G_SHADE + 1;	/* ▒ */
+	case 0x2593: return G_SHADE + 2;	/* ▓ */
 	case 0x2018: case 0x2019: case 0x201A: case 0x2032: return '\'';
 	case 0x201C: case 0x201D: case 0x201E: case 0x2033: return '"';
 	case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014: case 0x2212: return '-';
@@ -624,6 +653,21 @@ static bool control(vt *t, uint8_t c)
 	return c < 0x20;	/* the rest of them do nothing */
 }
 
+/* a character from from_unicode() onto the screen */
+static void show(vt *t, int g)
+{
+	if (g < 0x80) put_char(t, (uint8_t)g);	/* (ASCII stand-ins go through the set) */
+	else put_glyph(t, (uint8_t)g);
+}
+
+/* the bytes held in u_raw, as the PC's code page 437 */
+static void show_cp437(vt *t)
+{
+	for (int i = 0; i < u_n; i++)
+		show(t, u_raw[i] < 0x80 ? u_raw[i] : from_unicode(cp437[u_raw[i] - 0x80]));
+	u_n = 0;
+}
+
 static void byte(vt *t, uint8_t c)
 {
 	/* inside an OSC or DCS string, only its end matters */
@@ -639,16 +683,21 @@ static void byte(vt *t, uint8_t c)
 	if (t->state == S_UTF8) {
 		if ((c & 0xC0) == 0x80) {
 			u_cp = (u_cp << 6) | (c & 0x3F);
+			u_raw[u_n++] = c;
 			if (--u_left == 0) {
 				t->state = S_GROUND;
-				int g = from_unicode(u_cp);
-				if (g < 0x80) put_char(t, (uint8_t)g);	/* (ASCII stand-ins go through the set) */
-				else put_glyph(t, (uint8_t)g);
+				/* Two bytes that make a letter past the Latin alphabets
+				   (Greek, Cyrillic, Arabic and so on, U+0250-07FF, none of
+				   which calcterm can show) are far more likely the PC set's
+				   blocks and lines: CP437's 0xDB followed by its dark shade,
+				   or a double-line corner after a double line, say. */
+				if (u_n == 2 && u_cp >= 0x250) { show_cp437(t); return; }
+				show(t, from_unicode(u_cp));
 			}
 			return;
 		}
 		t->state = S_GROUND;
-		put_glyph(t, '?');			/* cut short: show it, then this byte */
+		show_cp437(t);				/* cut short: not UTF-8, so the PC set; then this byte */
 	}
 	if (c < 0x20) { control(t, c); return; }
 	if (c == 0x7F) return;
@@ -656,10 +705,12 @@ static void byte(vt *t, uint8_t c)
 	switch (t->state) {
 	case S_GROUND:
 		if (c < 0x80) { put_char(t, c); return; }
+		u_raw[0] = c;
+		u_n = 1;
 		if (c >= 0xC2 && c <= 0xDF) { u_cp = c & 0x1F; u_left = 1; t->state = S_UTF8; return; }
 		if (c >= 0xE0 && c <= 0xEF) { u_cp = c & 0x0F; u_left = 2; t->state = S_UTF8; return; }
 		if (c >= 0xF0 && c <= 0xF4) { u_cp = c & 0x07; u_left = 3; t->state = S_UTF8; return; }
-		put_glyph(t, '?');
+		show_cp437(t);				/* can't start UTF-8: the PC set */
 		return;
 	case S_ESC:
 		esc_dispatch(t, c);
@@ -806,7 +857,8 @@ void vt_row_text(const vt *t, int row, char *buf)
 		if (ch >= G_BASE && ch < G_BASE + 32) {
 			uint8_t d = ch - G_BASE + 0x5F;
 			ch = d == 0x71 ? '-' : d == 0x78 ? '|' : strchr("jklmntuvw", d) ? '+' : '#';
-		}
+		} else if (ch >= G_BLOCK && ch < G_SHADE) ch = ch == G_BLOCK ? ' ' : '#';
+		else if (ch >= G_SHADE && ch < G_END) ch = ':';
 		buf[c] = (char)ch;
 	}
 	buf[t->cols] = 0;
