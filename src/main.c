@@ -2,7 +2,8 @@
  *
  * For now the line is the serial port: UART0, which the PicoCalc's USB-C
  * socket carries through its CH340, or UART1 on GP4/GP5 for a level shifter
- * to RS-232.  Telnet, SSH and an FTP client are to come.
+ * to RS-232.  Telnet, SSH and SFTP are to come.  Files go both ways by
+ * ZMODEM (xfer.c), started from the host with sz or rz.
  *
  * The loop takes what's arrived and feeds it to the terminal, and draws
  * what's changed: at once when the line goes quiet, and otherwise every
@@ -21,10 +22,33 @@
 #include "menu.h"
 #include "settings.h"
 #include "shot.h"
+#include "xfer.h"
+#include "zmodem.h"
 
 #define DRAW_EVERY_MS 40
 
 static vt term;
+static zm_spotter spotter;
+
+/* what came in: to the terminal, unless it's the start of a ZMODEM transfer */
+static void incoming(const uint8_t *s, size_t n)
+{
+	uint8_t show[sizeof(uint8_t) * 512 + 8], out[8];
+	size_t k = 0;
+	for (size_t i = 0; i < n; i++) {
+		int got, spot = zm_spot(&spotter, s[i], out, &got);
+		if (k + (size_t)got > sizeof show) { vt_input(&term, show, k); k = 0; }
+		memcpy(show + k, out, (size_t)got);
+		k += (size_t)got;
+		if (spot == ZM_SPOT_NONE) continue;
+		vt_input(&term, show, k);
+		screen_draw(&term, false);
+		if (spot == ZM_SPOT_RECEIVE) xfer_receive(&term, s + i + 1, n - i - 1);
+		else xfer_send(&term, s + i + 1, n - i - 1);
+		return;				/* (the rest went to the transfer) */
+	}
+	vt_input(&term, show, k);
+}
 
 static void to_host(const uint8_t *s, size_t n, void *ctx)
 {
@@ -102,7 +126,7 @@ int main(void)
 		size_t n;
 		bool busy = false;
 		while ((n = link_read(buf, sizeof buf)) > 0) {
-			vt_input(&term, buf, n);
+			incoming(buf, n);
 			busy = true;
 			if (time_reached(until)) break;
 		}

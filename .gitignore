@@ -7,3 +7,5 @@ host/shots/
 .sw?
 host/menutest
 build-fonttest/
+host/zmtest
+host/xfertest

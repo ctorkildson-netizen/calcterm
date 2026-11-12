@@ -1,6 +1,6 @@
 # calcterm
 
-A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and an FTP client are to follow.
+A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). For now it talks over a serial line; telnet, SSH and SFTP are to follow.
 
 The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added so boxes join up, or of 80 columns in calcterm's own 4×10 font. Alt+F1 switches between them.
 
@@ -10,6 +10,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **VT52 mode**, entered and left as the VT100 does (`ESC [ ? 2 l`, `ESC <`).
 - **What Linux sends anyway**: the 16 colours (256-colour and RGB requests are matched to the nearest of them), bold, underline, reverse, the alternate screen that `vim`, `less` and `htop` use, and UTF-8. Box-drawing characters arrive as UTF-8 from most programs today and are shown with the line-drawing glyphs; other non-ASCII characters show as `?`.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
+- **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below).
 
 ## Keys
 
@@ -84,7 +85,18 @@ and put in
 
     sudo systemctl restart serial-getty@ttyUSB0.service
 
-and press Enter on the PicoCalc for the login prompt. A serial line doesn't tell Linux the screen's size, so it has to be set on the PicoCalc's line once you've logged in. `extras/calcsize.sh` does it by asking calcterm: it moves the cursor to the far corner, asks where it got to, and sets the size from the answer, so it's right at 64 columns or 80. Copy it to the Linux machine and add it to the end of `~/.bashrc`:
+and press Enter on the PicoCalc for the login prompt.
+
+Over the USB-C cable, `ttyUSB0` is the PicoCalc's own USB chip, so it goes away whenever the PicoCalc is unplugged or switched off, and the login with it; when it comes back, nothing starts the login again. A udev rule does that, every time the port appears:
+
+    sudo tee /etc/udev/rules.d/99-calcterm-getty.rules <<'EOF'
+    ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyUSB0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="serial-getty@ttyUSB0.service"
+    EOF
+    sudo udevadm control --reload
+
+(A USB-to-RS-232 adapter on the Linux machine stays plugged in, so it doesn't need this.)
+
+A serial line doesn't tell Linux the screen's size, so it has to be set on the PicoCalc's line once you've logged in. `extras/calcsize.sh` does it by asking calcterm: it moves the cursor to the far corner, asks where it got to, and sets the size from the answer, so it's right at 64 columns or 80. Copy it to the Linux machine and add it to the end of `~/.bashrc`:
 
     cat calcsize.sh >> ~/.bashrc
 
@@ -96,6 +108,16 @@ If Midnight Commander's top line scrolls off the screen, or its key bar wraps, t
 
 If the Up arrow moves the cursor rather than recalling the last command, the login shell is plain `sh`: `chsh -s /bin/bash`. `sudo systemctl stop serial-getty@ttyUSB0.service` ends it.
 
+#### Log out before you leave
+
+A serial line can't tell Linux that the other end has gone. When calcterm quits (to start another program, say), or the cable or RS-232 box comes out, **the login stays open**, and whoever next opens that port, with any terminal program, is in your account without a password. Coming back to calcterm puts you straight back in the same session, which is handy, but it works for anyone.
+
+So log out (`exit`, or Ctrl+D) before leaving calcterm. As a safety net, have bash log out by itself after a while with nothing typed, on serial lines only, by adding this to `~/.bashrc` on the Linux machine:
+
+    case "$(tty)" in /dev/ttyUSB*|/dev/ttyACM*|/dev/ttyS*) TMOUT=900 ;; esac   # log out after 15 idle minutes
+
+It only counts time at the prompt: a long-running program (vim, mc, top) isn't interrupted.
+
 ### Midnight Commander
 
 Typing long shell commands on the PicoCalc's keyboard is a chore. [Midnight Commander](https://midnight-commander.org/) (`mc`) is a full-screen file manager in the style of Norton Commander: two directory panels, the arrow keys to move, Enter to open or run, and the function keys along the bottom to view, edit, copy, move, make folders and delete. It fits calcterm well, and makes the PicoCalc a comfortable way to look after another machine:
@@ -104,6 +126,31 @@ Typing long shell commands on the PicoCalc's keyboard is a chore. [Midnight Comm
     mc
 
 Its command line is still there at the bottom for when you need it, and F10 leaves it.
+
+### Moving files (ZMODEM)
+
+For a short script or a config file, there's no need for anything more than the terminal. The host needs lrzsz, which many Linux systems (Ubuntu among them) already have; if `sz` isn't found:
+
+    sudo apt install lrzsz
+
+**To the PicoCalc:** `sz deploy.sh` at the host's prompt. calcterm sees the transfer start and takes the file, into `/calcterm/files` on the card (replacing one of the same name); the bottom line shows how it's going, and says when it's there. Several files at once work too: `sz *.sh`.
+
+**From the PicoCalc:** `rz` at the host's prompt. calcterm opens a list of the card's files, starting in `/calcterm/files`: the arrows choose, Enter sends the file (or opens a folder), Backspace goes up a folder. The file arrives in the host's current folder, replacing one of the same name. The bottom line says "Sent" as soon as it's there; the host's prompt can take another two or three seconds to come back while rz closes up.
+
+**BOTH WAYS, A FILE OF THE SAME NAME IS REPLACED WITHOUT ASKING:** on the card by `sz`, and in the host's folder by `rz`. That's deliberate (it's for small files, sent back and forth while you work on them), but there's no undo.
+
+It's a serial line, so it's for small files. At 115200 (calcterm's speed unless you've changed it), roughly:
+
+| File | Takes |
+| --- | --- |
+| a script, 10 KB | about a second |
+| 100 KB | about 10 seconds |
+| 1 MB | about 1½ minutes |
+| 10 MB | about 15 minutes |
+
+At 9600 it's twelve times as long. For anything big, the card in a reader or FTP is the better way.
+
+Esc stops a transfer at any point, and in the list, sends nothing. A damaged packet is sent again, so a noisy line slows a transfer down rather than spoiling it. The line has to carry all eight bits (8N1, as it is unless changed in the setup menu).
 
 ### Other tests
 
@@ -122,7 +169,7 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 
 ## Tests
 
-`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel.
+`host/` has the terminal's tests, which run on Linux: `make -C host check`. `test_vt` checks the escape sequences one by one. `ptyrun` runs a real program against the terminal and prints the screen it leaves. `screentest` does the same through the renderer, against a model of the LCD and its scrolling, and checks the result matches a fresh whole-screen draw pixel for pixel. `zmtest` sends files both ways between calcterm's ZMODEM and the real `sz` and `rz` (from lrzsz), on a clean line and on one that damages a byte now and then, and compares them byte for byte; `xfertest` does it through the PicoCalc side as well, the card, the keys and the file list.
 
 ## Built on
 

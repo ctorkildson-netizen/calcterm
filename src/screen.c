@@ -37,6 +37,7 @@ static bool flashing;
 static absolute_time_t flash_end;
 static char note[TEXT_COLS + 1];
 static absolute_time_t note_end;
+static bool note_drawn;			/* a note is on the screen's bottom row */
 
 void screen_init(void)
 {
@@ -125,6 +126,13 @@ void screen_render_row(const vt *t, int row, uint16_t *buf)
 	flashing = flash;
 }
 
+static void mark(vt *t, int row, int col);
+static void mark_row(vt *t, int row)
+{
+	mark(t, row, 0);
+	mark(t, row, t->cols - 1);
+}
+
 /* a cell to be drawn again (the cursor's, the sticky mark's) */
 static void mark(vt *t, int row, int col)
 {
@@ -143,6 +151,11 @@ void screen_draw(vt *t, bool sticky)
 	if (t->hw_scroll) {
 		for (int i = 0; i < t->hw_scroll; i++) lcd_scroll_up();
 		cur_y -= t->hw_scroll;
+		/* a note on the bottom row has rolled up with the rest: the rows it
+		   went to, back as they should be */
+		if (note_drawn)
+			for (int r = VT_ROWS - 1 - t->hw_scroll; r < VT_ROWS - 1; r++)
+				if (r >= 0) mark_row(t, r);
 		t->hw_scroll = 0;
 	}
 	/* the old cursor, the sticky mark: put back what's under them */
@@ -175,6 +188,7 @@ void screen_draw(vt *t, bool sticky)
 			screen_text(0, VT_ROWS - 1, note, 0, 11);
 		}
 	}
+	note_drawn = note[0] != 0;
 }
 
 void screen_note(const char *s, int ms)
