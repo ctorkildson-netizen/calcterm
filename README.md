@@ -27,7 +27,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 | Brk | a quarter-second break on the line |
 | Alt+F1 | 64 or 80 columns (then, on a serial line, run `calcsize` on the host, below; telnet tells the host itself) |
 | Alt+F2 | telnet: the host list, to connect or hang up |
-| Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, and a .txt of the screen's text) |
+| Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, a .txt of the screen's text, and a .raw of the last 16 KB the host sent, for when something draws wrongly) |
 | **Alt+F5** | **the setup menu** |
 
 ## The setup menu (Alt+F5)

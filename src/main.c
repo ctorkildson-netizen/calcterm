@@ -35,6 +35,7 @@ static zm_spotter spotter;
 /* what came in: to the terminal, unless it's the start of a ZMODEM transfer */
 static void incoming(const uint8_t *s, size_t n)
 {
+	shot_record(s, n);			/* (kept for a screenshot's .raw) */
 	uint8_t show[sizeof(uint8_t) * 512 + 8], out[8];
 	size_t k = 0;
 	for (size_t i = 0; i < n; i++) {
