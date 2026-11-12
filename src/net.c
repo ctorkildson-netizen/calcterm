@@ -267,6 +267,17 @@ void net_write(const uint8_t *s, size_t n)
 	}
 }
 
+void net_leave(void)
+{
+	if (!radio_on) return;
+	net_close();
+	/* tell the router we've gone: without it, it keeps the PicoCalc's old
+	   connection for a minute or so, and turns away the next program that
+	   joins (the dots, then "retrying") until that runs out */
+	cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
+	sleep_ms(200);				/* (time for the message to go) */
+}
+
 const char *net_address(void)
 {
 	return address;

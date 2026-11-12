@@ -28,6 +28,7 @@ void link_open(const link_config *c) { (void)c; }
 size_t link_read(uint8_t *b, size_t m) { (void)b; (void)m; return 0; }
 void link_write(const uint8_t *s, size_t n) { (void)s; (void)n; }
 void link_break(void) { printf("break sent\n"); }
+void net_leave(void) { }
 settings cfg;
 bool settings_save(const char **why) { *why = "test"; return false; }
 void shot_take(const vt *t) { (void)t; printf("screenshot taken\n"); }
