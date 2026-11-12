@@ -28,6 +28,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 | Brk | a quarter-second break on the line |
 | Alt+F1 | 64 or 80 columns (then, on a serial line, run `calcsize` on the host, below; telnet tells the host itself) |
 | Alt+F2 | telnet: the host list, to connect or hang up |
+| Alt+F3 | the Bluetooth keyboard's state, as a line in the terminal (for troubleshooting) |
 | Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, and a .txt of the screen's text) |
 | **Alt+F5** | **the setup menu** |
 
