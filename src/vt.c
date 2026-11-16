@@ -837,9 +837,12 @@ void vt_set_cols(vt *t, int cols)
 	t->cols = cols;
 	if (cols > old) {		/* the new columns, blank (they may hold old text) */
 		for (int r = 0; r < VT_ROWS; r++) clear_cells(t, r, old, cols);
-		if (on_alt)
+		if (on_alt) {		/* and the kept main screen's, in the plain colours: not
+					   the full-screen program's (mc's blue stayed behind) */
+			vt_cell plain = { ' ', 0, C_DEF_FG, C_DEF_BG };
 			for (int r = 0; r < VT_ROWS; r++)
-				for (int c = old; c < cols; c++) alt_save[r][c] = blank(t);
+				for (int c = old; c < cols; c++) alt_save[r][c] = plain;
+		}
 	}
 	for (int c = old; c < cols; c++) t->tabs[c] = c % 8 == 0;
 	if (t->x > cols - 1) t->x = cols - 1;
