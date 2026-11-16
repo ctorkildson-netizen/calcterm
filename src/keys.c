@@ -51,7 +51,7 @@ static int translate(uint8_t c)
 	case KEY_DEL: return VK_DEL;
 	case KEY_INSERT: return VK_INS;
 	case KEY_F1: return m_alt ? K_WIDTH : VK_PF1;	/* Alt+F1: 64 or 80 columns */
-	case KEY_F2: return VK_PF2;
+	case KEY_F2: return m_alt ? K_HOSTS : VK_PF2;	/* Alt+F2: telnet's host list */
 	case KEY_F3: return VK_PF3;
 	case KEY_F4: return m_alt ? K_SHOT : VK_PF4;	/* Alt+F4: a screenshot */
 	case KEY_F5: return m_alt ? K_MENU : VK_F5;	/* Alt+F5: the setup menu */

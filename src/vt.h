@@ -29,6 +29,12 @@
 /* The DEC Special Graphics set (line drawing) comes out as these codes,
    0x5F-0x7E in the set at G_BASE + 0..31; the font has glyphs there. */
 #define G_BASE 0x80
+/* Block elements, drawn as shapes rather than from the font, so they tile:
+   G_BLOCK + a mask of the cell's quarters (1 top left, 2 top right, 4 bottom
+   left, 8 bottom right; 15 the full block), then the three shades. */
+#define G_BLOCK (G_BASE + 32)
+#define G_SHADE (G_BLOCK + 16)		/* light, medium, dark */
+#define G_END (G_SHADE + 3)
 
 typedef struct {
 	uint8_t ch;

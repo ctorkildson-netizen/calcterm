@@ -1,4 +1,4 @@
-/* link.c -- the serial line.
+/* link.c -- the line: the serial port, or telnet (net.c, telnet.c).
  *
  * What comes in is caught by the UART's interrupt into a 16 KB ring, so
  * nothing is lost while the screen is being drawn; with XON/XOFF on, the
@@ -11,6 +11,11 @@
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
 #include "link.h"
+#include "net.h"
+#include "telnet.h"
+
+static bool tel;			/* the line is telnet */
+static telnet tn;
 
 #define RING 16384			/* a power of two */
 #define HIGH (RING * 3 / 4)
@@ -73,12 +78,12 @@ void link_open(const link_config *c)
 	if (flow) uart_putc_raw(uart, XON);	/* in case it was left paused */
 }
 
-size_t link_waiting(void)
+static size_t ser_waiting(void)
 {
 	return head - tail;
 }
 
-size_t link_read(uint8_t *buf, size_t max)
+static size_t ser_read(uint8_t *buf, size_t max)
 {
 	size_t n = 0;
 	uint32_t h = head;
@@ -93,12 +98,12 @@ size_t link_read(uint8_t *buf, size_t max)
 	return n;
 }
 
-void link_write(const uint8_t *s, size_t n)
+static void ser_write(const uint8_t *s, size_t n)
 {
 	while (n--) uart_putc_raw(uart, *s++);
 }
 
-void link_break(void)
+static void ser_break(void)
 {
 	uart_tx_wait_blocking(uart);
 	uart_set_break(uart, true);
@@ -106,7 +111,72 @@ void link_break(void)
 	uart_set_break(uart, false);
 }
 
-uint32_t link_lost(void)
+static uint32_t ser_lost(void)
 {
 	return lost;
+}
+
+/* ------------------------------------------------------------ either */
+
+static void tn_send(void *ctx, const uint8_t *s, size_t n)
+{
+	(void)ctx;
+	net_write(s, n);
+}
+
+bool link_telnet(const char *host, uint16_t port, bool (*progress)(const char *, void *), void *ctx,
+		 const char *term, int cols, int rows, char *why, size_t why_size)
+{
+	link_hangup();
+	if (!net_connect(host, port, progress, ctx, why, why_size)) return false;
+	tel = true;
+	telnet_start(&tn, tn_send, NULL, term, cols, rows);
+	return true;
+}
+
+void link_hangup(void)
+{
+	if (tel) net_close();
+	tel = false;
+}
+
+bool link_is_telnet(void) { return tel; }
+bool link_dropped(void) { return tel && !net_open(); }
+void link_size(int cols, int rows) { if (tel) telnet_size(&tn, cols, rows); }
+bool link_host_echoes(void) { return tel && telnet_host_echoes(&tn); }
+
+size_t link_waiting(void)
+{
+	return tel ? net_waiting() : ser_waiting();
+}
+
+size_t link_read(uint8_t *buf, size_t max)
+{
+	if (!tel) return ser_read(buf, max);
+	/* telnet's commands come out, so what's left may be nothing: read on
+	   until there's data or nothing more */
+	uint8_t raw[512];
+	for (;;) {
+		size_t n = net_read(raw, max < sizeof raw ? max : sizeof raw);
+		if (!n) return 0;
+		size_t k = telnet_in(&tn, raw, n, buf);
+		if (k) return k;
+	}
+}
+
+void link_write(const uint8_t *s, size_t n)
+{
+	if (tel) telnet_out(&tn, s, n);
+	else ser_write(s, n);
+}
+
+void link_break(void)
+{
+	if (tel) telnet_break(&tn);
+	else ser_break();
+}
+
+uint32_t link_lost(void)
+{
+	return tel ? 0 : ser_lost();
 }

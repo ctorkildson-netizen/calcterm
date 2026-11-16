@@ -116,6 +116,27 @@ static bool write_txt(const vt *t, const char *path)
 	return ok;
 }
 
+#define RAW 16384			/* a power of two */
+static uint8_t raw[RAW];
+static uint32_t raw_head;		/* bytes ever recorded */
+
+void shot_record(const uint8_t *s, size_t n)
+{
+	while (n--) raw[raw_head++ & (RAW - 1)] = *s++;
+}
+
+static bool write_raw(const char *path)
+{
+	FIL f;
+	if (f_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
+	uint32_t n = raw_head < RAW ? raw_head : RAW, from = raw_head - n;
+	uint32_t at = from & (RAW - 1), first = n < RAW - at ? n : RAW - at;
+	bool ok = write_all(&f, (const char *)raw + at, (UINT)first);
+	if (ok && first < n) ok = write_all(&f, (const char *)raw, (UINT)(n - first));
+	if (f_close(&f) != FR_OK) ok = false;
+	return ok;
+}
+
 void shot_take(const vt *t)
 {
 	char name[48], path[80], msg[96];
@@ -128,6 +149,10 @@ void shot_take(const vt *t)
 	if (ok) {
 		snprintf(path, sizeof path, "/screenshots/%s.txt", name);
 		ok = write_txt(t, path);
+	}
+	if (ok) {
+		snprintf(path, sizeof path, "/screenshots/%s.raw", name);
+		ok = write_raw(path);
 	}
 	if (ok) snprintf(msg, sizeof msg, " Saved /screenshots/%s.bmp", name);
 	else snprintf(msg, sizeof msg, " The screenshot failed (is there a card in?)");

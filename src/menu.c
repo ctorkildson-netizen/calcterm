@@ -14,6 +14,7 @@
 #include "drivers/filesystem.h"
 #include "keys.h"
 #include "link.h"
+#include "net.h"
 #include "screen.h"
 #include "settings.h"
 #include "menu.h"
@@ -179,6 +180,7 @@ void menu_run(vt *t)
 				if (settings_save(&why)) snprintf(note, sizeof note, "Saved in %s.", CFG_PATH);
 				else snprintf(note, sizeof note, "Not saved: %.30s", why);
 			} else if (sel == I_LEAVE) {
+				net_leave();		/* (so the next program's Wi-Fi joins at once) */
 				if (!picocalc_shell_exit())
 					snprintf(note, sizeof note, "No shell to go back to (no loader or card).");
 			}

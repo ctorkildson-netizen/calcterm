@@ -8,7 +8,7 @@
 /* keys_get() gives a character (0x00-0xFF, control characters already
    made), one of vt.h's VK_ keys, or one of these; KF_ALT is or-ed in when
    Alt was held.  -1: nothing. */
-enum { K_MENU = 0x200, K_BRK, K_SHOT, K_WIDTH };
+enum { K_MENU = 0x200, K_BRK, K_SHOT, K_WIDTH, K_HOSTS };
 #define KF_ALT 0x10000
 
 void keys_init(void);

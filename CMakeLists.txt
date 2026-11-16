@@ -1,5 +1,5 @@
-# calcterm -- a VT100 terminal for the PicoCalc, over serial for now
-# (telnet, SSH and an FTP client to follow).
+# calcterm -- a VT100 terminal for the PicoCalc, over serial or telnet
+# (SSH and an FTP client to follow).
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 11)
 set(PICO_BOARD pico2_w CACHE STRING "Board type")
@@ -15,15 +15,18 @@ picocalc_fatfs(${MODULES}/picocalc-text-starter)	# the SD card, for the settings
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
     src/settings.c src/shot.c src/termfont.c src/font4.c src/zmodem.c src/xfer.c ${DRV}/font-8x10.c
+    src/telnet.c src/net.c src/hosts.c
+    ${MODULES}/picocalc-shell/src/core/ntp.c	# /ntp/ntp.cfg, read as the shell's NTP reads it
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(calcterm PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
     ${MODULES}/picocalc-text-starter
     ${DRV}
-    ${MODULES}/picocalc-shell/include)
+    ${MODULES}/picocalc-shell/include
+    ${MODULES}/picocalc-shell/src/core)
 pico_set_program_name(calcterm "calcterm")
-pico_set_program_version(calcterm "0.3")
+pico_set_program_version(calcterm "0.4")
 # which build this is, on the sign-on line and in the menu: the commit, and
 # its date (so two builds of the same version can be told apart on the PicoCalc)
 execute_process(COMMAND git log -1 --format=%h%x20%cs WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
@@ -37,5 +40,8 @@ pico_enable_stdio_uart(calcterm 0)
 pico_enable_stdio_usb(calcterm 0)
 target_link_libraries(calcterm picocalc_fs
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_uart
-    hardware_watchdog hardware_powman)
+    hardware_watchdog hardware_powman
+    pico_cyw43_arch_lwip_threadsafe_background)	# telnet: Wi-Fi in the background
+# what the router lists calcterm as
+target_compile_definitions(calcterm PRIVATE CYW43_HOST_NAME="calcterm")
 pico_add_extra_outputs(calcterm)

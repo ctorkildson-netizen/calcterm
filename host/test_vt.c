@@ -153,6 +153,22 @@ int main(void)
 	feed("\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x90 caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d");
 	ROW(0, "+-+ caf? \"q\"");
 
+	/* block elements by UTF-8: full, halves, quarters, shades; é stays one cell */
+	fresh();
+	feed("\xe2\x96\x88\xe2\x96\x80\xe2\x96\x84\xe2\x96\x8c\xe2\x96\x90|\xe2\x96\x91\xe2\x96\x92\xe2\x96\x93|\xc3\xa9|");
+	ROW(0, "#####|:::|?|");
+	IS("full", t.cell[0][0].ch, G_BLOCK + 15); IS("upper", t.cell[0][1].ch, G_BLOCK + 3);
+	IS("lower", t.cell[0][2].ch, G_BLOCK + 12); IS("left", t.cell[0][3].ch, G_BLOCK + 5);
+	IS("right", t.cell[0][4].ch, G_BLOCK + 10); IS("dark", t.cell[0][8].ch, G_SHADE + 2);
+
+	/* the PC's code page 437, as BBSes send it: bytes that can't be UTF-8, and
+	   pairs that would be Arabic and the like (0xDB 0xB2: full block, dark shade) */
+	fresh();
+	feed("\xdb\xdb\xb2\xb1\xb0\xdf\xdc|\xc9\xcd\xbb|\xdb\xb2x");
+	ROW(0, "##:::##|+-+|#:x");
+	IS("cp437 full", t.cell[0][0].ch, G_BLOCK + 15); IS("cp437 dark", t.cell[0][2].ch, G_SHADE + 2);
+	IS("cp437 upper half", t.cell[0][5].ch, G_BLOCK + 3);
+
 	/* sequences it doesn't know leave nothing behind */
 	fresh();
 	feed("a\x1b]0;a window title\x07" "b\x1b]2;another\x1b\\c\x1b[?2004hd\x1b[>c\x1bPdcs\x1b\\e");
