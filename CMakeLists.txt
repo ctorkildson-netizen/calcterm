@@ -12,6 +12,11 @@ set(DRV ${MODULES}/picocalc-text-starter/drivers)
 include(${MODULES}/picocalc-extras/fatfs/fatfs.cmake)
 picocalc_fatfs(${MODULES}/picocalc-text-starter)	# the SD card, for the settings
 
+# a Bluetooth keyboard (picocalc-extras' btkbd), alongside telnet's Wi-Fi; it
+# needs the Pico SDK's newer BTstack, as picocalc-extras says
+set(BTKBD_WITH_WIFI ON)
+include(${MODULES}/picocalc-extras/bluetooth/bluetooth.cmake)
+
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
     src/settings.c src/shot.c src/termfont.c src/font4.c src/zmodem.c src/xfer.c ${DRV}/font-8x10.c
@@ -26,7 +31,7 @@ target_include_directories(calcterm PRIVATE
     ${MODULES}/picocalc-shell/include
     ${MODULES}/picocalc-shell/src/core)
 pico_set_program_name(calcterm "calcterm")
-pico_set_program_version(calcterm "0.4")
+pico_set_program_version(calcterm "0.5")
 # which build this is, on the sign-on line and in the menu: the commit, and
 # its date (so two builds of the same version can be told apart on the PicoCalc)
 execute_process(COMMAND git log -1 --format=%h%x20%cs WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
@@ -41,7 +46,8 @@ pico_enable_stdio_usb(calcterm 0)
 target_link_libraries(calcterm picocalc_fs
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_uart
     hardware_watchdog hardware_powman
-    pico_cyw43_arch_lwip_threadsafe_background)	# telnet: Wi-Fi in the background
+    pico_cyw43_arch_lwip_threadsafe_background	# telnet: Wi-Fi in the background
+    picocalc_btkbd)				# a Bluetooth keyboard
 # what the router lists calcterm as
 target_compile_definitions(calcterm PRIVATE CYW43_HOST_NAME="calcterm")
 pico_add_extra_outputs(calcterm)

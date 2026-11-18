@@ -26,6 +26,8 @@
 #include "xfer.h"
 #include "zmodem.h"
 #include "hosts.h"
+#include "net.h"
+#include "btkbd.h"
 
 #define DRAW_EVERY_MS 40
 
@@ -70,6 +72,33 @@ static void local(const char *s)	/* a message of our own, on the terminal's scre
 	vt_input(&term, (const uint8_t *)s, strlen(s));
 }
 
+static bool bt;				/* Bluetooth started: a keyboard's paired */
+
+/* a keyboard paired with btpair (picocalc-extras): start Bluetooth, which
+   then runs in the background, its keys coming in with the PicoCalc's own */
+static void bluetooth(void)
+{
+	FILINFO fi;
+	if (f_stat("/bluetooth/pairing.dat", &fi) != FR_OK) return;
+	if (!net_radio()) return;		/* (the radio's shared with telnet's Wi-Fi) */
+	bt = btkbd_init();
+}
+
+/* the keyboard coming and going, on the bottom line */
+static void keyboard_news(void)
+{
+	static btkbd_state_t was = BTKBD_OFF;
+	if (!bt) return;
+	btkbd_state_t now = btkbd_state();
+	if (now == was) return;
+	char b[72];
+	if (now == BTKBD_CONNECTED) snprintf(b, sizeof b, " Keyboard: %.40s connected.", btkbd_name());
+	else if (was == BTKBD_CONNECTED) snprintf(b, sizeof b, " Keyboard: %.40s gone.", btkbd_name());
+	else b[0] = 0;
+	if (b[0]) screen_note(b, 3000);
+	was = now;
+}
+
 static void sign_on(bool loaded)
 {
 	char b[160];
@@ -81,6 +110,10 @@ static void sign_on(bool loaded)
 		 cfg.link.port == PORT_GP45 ? "GP4/GP5" : "USB-C",
 		 loaded ? "" : " (the defaults)");
 	local(b);
+	if (bt && btkbd_name()[0]) {
+		snprintf(b, sizeof b, "Bluetooth keyboard: %.40s (press a key on it to connect).\r\n\n", btkbd_name());
+		local(b);
+	}
 }
 
 /* while connecting: what's happening on the bottom line; Esc stops it */
@@ -135,6 +168,14 @@ static void key(int k)
 	if (k == K_SHOT) { screen_draw(&term, false); shot_take(&term); return; }
 	if (k == K_WIDTH) { cfg.cols = cfg.cols == 80 ? 64 : 80; apply_settings(&term); return; }
 	if (k == K_HOSTS) { hosts(); return; }
+	if (k == K_BTDIAG) {			/* (testing) Bluetooth's state, into the terminal's text */
+		char b[200];
+		if (!bt) snprintf(b, sizeof b, "\r\n[Bluetooth not started]\r\n");
+		else snprintf(b, sizeof b, "\r\n[%s | %s | %s]\r\n[%s]\r\n", btkbd_status(), btkbd_diag(),
+			      btkbd_trace_line(0), btkbd_trace_line(1));
+		local(b);
+		return;
+	}
 	if (k >= 0x100) vt_key(&term, k);
 	else vt_key_char(&term, (uint8_t)k, alt);
 }
@@ -150,6 +191,7 @@ int main(void)
 	settings_defaults();
 	bool loaded = settings_load();
 	link_open(&cfg.link);
+	bluetooth();
 	vt_init(&term, to_host, bell, NULL);
 	apply_settings(&term);
 	sign_on(loaded);
@@ -171,6 +213,7 @@ int main(void)
 				snprintf(b, sizeof b, " %d columns. On the host: calcsize (or stty cols %d)", term.cols, term.cols);
 			screen_note(b, 4000);
 		}
+		keyboard_news();
 		/* telnet: the host echoes, or (if it says it won't) calcterm does */
 		term.local_echo = link_is_telnet() ? !link_host_echoes() : cfg.echo;
 		if (link_dropped()) {

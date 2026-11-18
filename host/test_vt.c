@@ -153,6 +153,16 @@ int main(void)
 	feed("\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x90 caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d");
 	ROW(0, "+-+ caf? \"q\"");
 
+	/* widening while a full-screen program has the alternate screen: the
+	   main screen's new columns come back plain, not in its colours */
+	fresh();
+	feed("main\x1b[?1049h\x1b[44m\x1b[2J");
+	vt_set_cols(&t, 80);
+	feed("\x1b[44m\x1b[2J\x1b[?1049l\x1b[0m");
+	IS("main back", t.cell[0][0].ch, 'm');
+	IS("new column plain", t.cell[0][70].bg, C_DEF_BG);
+	vt_set_cols(&t, 64);
+
 	/* block elements by UTF-8: full, halves, quarters, shades; é stays one cell */
 	fresh();
 	feed("\xe2\x96\x88\xe2\x96\x80\xe2\x96\x84\xe2\x96\x8c\xe2\x96\x90|\xe2\x96\x91\xe2\x96\x92\xe2\x96\x93|\xc3\xa9|");

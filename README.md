@@ -12,6 +12,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 - **ANSI art**, as BBSes draw it: the block characters (full, half and quarter blocks, and the three shades) are drawn as shapes that join up cell to cell, whether they come as UTF-8 or in the IBM PC's own character set (code page 437), which many boards still send. Bytes that can't be UTF-8 are taken as the PC's.
 - **Anything it doesn't know is ignored**, window titles included, so it never leaves litter on the screen.
 - **Telnet over Wi-Fi** (Pico 2 W), to hosts kept in a list on the card (below).
+- **A Bluetooth keyboard** alongside the PicoCalc's own (Pico 2 W).
 - **Files both ways by ZMODEM**: `sz` on the host sends one to the PicoCalc's card, `rz` fetches one from it (below), over serial or telnet.
 
 ## Keys
@@ -27,6 +28,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 | Brk | a quarter-second break on the line |
 | Alt+F1 | 64 or 80 columns (then, on a serial line, run `calcsize` on the host, below; telnet tells the host itself) |
 | Alt+F2 | telnet: the host list, to connect or hang up |
+| Alt+F3 | the Bluetooth keyboard's state, as a line in the terminal (for troubleshooting) |
 | Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, a .txt of the screen's text, and a .raw of the last 16 KB the host sent, for when something draws wrongly) |
 | **Alt+F5** | **the setup menu** |
 
@@ -91,6 +93,10 @@ That installs a small inetd that answers on port 23 and starts a login for each 
 `sudo ss -ltnp | grep ':23 '` shows whether it's answering. If Ubuntu's firewall is on (`sudo ufw status`), allow telnet from your own network only: `sudo ufw allow from 192.168.0.0/16 to any port 23`. Log in as yourself (Ubuntu doesn't allow root over telnet).
 
 Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. SSH, which encrypts, is planned.
+
+## A Bluetooth keyboard (Pico 2 W)
+
+Pair the keyboard once with `btpair` from [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras) (2.3 or later). After that calcterm finds it by itself: the sign-on says which keyboard it's waiting for, and pressing a key on it connects it ("Keyboard: ... connected" on the bottom line). Both keyboards work at once, and every key does on the Bluetooth one what it does on the PicoCalc's, Alt+F1 to Alt+F5 included. A Bluetooth keyboard works with telnet's Wi-Fi on at the same time; they share the radio.
 
 ## Trying it with Linux
 
@@ -197,7 +203,7 @@ Esc stops a transfer at any point, and in the list, sends nothing. A damaged pac
 
 ## Building
 
-With the Pico SDK (2.2.0) and `arm-none-eabi-gcc`:
+With `arm-none-eabi-gcc` and a Pico SDK newer than 2.2.0: the Bluetooth keyboard needs the BTstack on the SDK's `develop` branch, which has the host for BLE keyboards (2.2.0's doesn't).
 
     git clone --recurse-submodules https://github.com/ctorkildson-netizen/calcterm
     cd calcterm
@@ -214,7 +220,8 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 
 - [picocalc-text-starter](https://github.com/BlairLeduc/picocalc-text-starter) (Blair Leduc): the LCD, keyboard and SD card drivers, and the font.
 - [picocalc-shell](https://github.com/BlairLeduc/picocalc-shell) (Blair Leduc): returning to the shell, and reading `/ntp/ntp.cfg` for Wi-Fi.
-- The Pico SDK's CYW43 driver and lwIP: Wi-Fi and TCP for telnet.
+- [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras)' btkbd: the Bluetooth keyboard.
+- The Pico SDK's CYW43 driver, lwIP and BTstack: Wi-Fi and TCP for telnet, and Bluetooth.
 - [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras): building FatFs for the card.
 
 These are git submodules pinned to release tags; Dependabot proposes new releases as pull requests.
