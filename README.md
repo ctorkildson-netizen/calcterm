@@ -84,7 +84,13 @@ Or choose *Type an address...* in the list: `192.168.1.50`, or `bbs.example.org:
 
     sudo apt install telnetd
 
-That's all: it installs a small inetd that answers on port 23 and starts a login for each connection. Log in as yourself (Ubuntu doesn't allow root over telnet).
+That installs a small inetd that answers on port 23 and starts a login for each connection. On some installs (Ubuntu 26.04 here) the telnet line in `/etc/inetd.conf` comes switched off (it starts with `#<off>#`); then switch it on and restart inetd:
+
+    sudo apt install tcpd
+    sudo update-inetd --enable telnet
+    sudo systemctl restart inetutils-inetd
+
+`sudo ss -ltnp | grep ':23 '` shows whether it's answering. If Ubuntu's firewall is on (`sudo ufw status`), allow telnet from your own network only: `sudo ufw allow from 192.168.0.0/16 to any port 23`. Log in as yourself (Ubuntu doesn't allow root over telnet).
 
 Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. SSH, which encrypts, is planned.
 
