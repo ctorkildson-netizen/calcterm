@@ -11,3 +11,4 @@ host/zmtest
 host/xfertest
 host/tntest
 build-bt/
+build-net/

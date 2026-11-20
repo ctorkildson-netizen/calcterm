@@ -17,11 +17,15 @@ picocalc_fatfs(${MODULES}/picocalc-text-starter)	# the SD card, for the settings
 set(BTKBD_WITH_WIFI ON)
 include(${MODULES}/picocalc-extras/bluetooth/bluetooth.cmake)
 
+# Wi-Fi and TCP for telnet: picocalc-extras' net/ (with its lwipopts.h), which
+# reads /ntp/ntp.cfg with the shell's own parser
+include(${MODULES}/picocalc-extras/net/net.cmake)
+picocalc_net(${MODULES}/picocalc-shell)
+
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
     src/settings.c src/shot.c src/termfont.c src/font4.c src/zmodem.c src/xfer.c ${DRV}/font-8x10.c
-    src/telnet.c src/net.c src/hosts.c
-    ${MODULES}/picocalc-shell/src/core/ntp.c	# /ntp/ntp.cfg, read as the shell's NTP reads it
+    src/telnet.c src/hosts.c
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(calcterm PRIVATE
@@ -43,10 +47,9 @@ target_compile_definitions(calcterm PRIVATE CALCTERM_BUILD="${CALCTERM_BUILD}")
 # the Pico's UART0 is the terminal's line, so nothing else may print to it
 pico_enable_stdio_uart(calcterm 0)
 pico_enable_stdio_usb(calcterm 0)
-target_link_libraries(calcterm picocalc_fs
+target_link_libraries(calcterm picocalc_fs picocalc_net
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_uart
     hardware_watchdog hardware_powman
-    pico_cyw43_arch_lwip_threadsafe_background	# telnet: Wi-Fi in the background
     picocalc_btkbd)				# a Bluetooth keyboard
 # what the router lists calcterm as
 target_compile_definitions(calcterm PRIVATE CYW43_HOST_NAME="calcterm")
