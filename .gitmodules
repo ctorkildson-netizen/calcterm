@@ -7,3 +7,6 @@
 [submodule "modules/picocalc-extras"]
 	path = modules/picocalc-extras
 	url = https://github.com/ctorkildson-netizen/picocalc-extras
+[submodule "modules/libssh2"]
+	path = modules/libssh2
+	url = https://github.com/libssh2/libssh2.git

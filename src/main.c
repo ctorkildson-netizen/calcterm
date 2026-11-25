@@ -105,7 +105,7 @@ static void sign_on(bool loaded)
 	static const char *const fmt[] = { "N", "O", "E" };
 	snprintf(b, sizeof b,
 		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal (" CALCTERM_BUILD ")\r\n"
-		 "%lu %d%s%d on %s%s.\r\nAlt+F5: setup.  Alt+F1: 64 or 80 columns.  Alt+F2: telnet.\r\n\n",
+		 "%lu %d%s%d on %s%s.\r\nAlt+F5: setup.  Alt+F1: 64 or 80 columns.  Alt+F2: telnet, SSH.\r\n\n",
 		 (unsigned long)cfg.link.baud, cfg.link.data, fmt[cfg.link.parity], cfg.link.stop,
 		 cfg.link.port == PORT_GP45 ? "GP4/GP5" : "USB-C",
 		 loaded ? "" : " (the defaults)");
@@ -131,6 +131,8 @@ static bool progress(const char *what, void *ctx)
 	return true;
 }
 
+static bool ssh_connect(const char *target, const char *at, uint16_t port, char *why, size_t why_size);
+
 static void hosts(void)
 {
 	char host[HOST_LEN], name[24], b[160];
@@ -147,16 +149,95 @@ static void hosts(void)
 	if (what != HOSTS_CONNECT) return;
 	char why[96];
 	bool was = link_is_telnet();
-	if (!link_telnet(host, port, progress, NULL, "calcterm", term.cols, VT_ROWS, why, sizeof why)) {
+	char *at = strchr(host, '@');
+	bool ok = at ? ssh_connect(host, at, port, why, sizeof why)
+		     : link_telnet(host, port, progress, NULL, "calcterm", term.cols, VT_ROWS, why, sizeof why);
+	if (!ok) {
 		snprintf(b, sizeof b, " %.62s", why);
 		screen_note(b, 8000);
 		if (was) local("\r\n[Hung up. Back on the serial port.]\r\n");
 		return;
 	}
 	hosts_remember(host, port);
-	snprintf(b, sizeof b, "\r\n[Connected to %.40s. Alt+F2: hang up.]\r\n", name);
+	snprintf(b, sizeof b, "\r\n[Connected to %.40s%s. Alt+F2: hang up.]\r\n", name, at ? " by SSH" : "");
 	local(b);
 	screen_note(" Connected.", 2000);
+}
+
+/* a line typed on the bottom line (hidden: dots, for a password); false: Esc */
+static bool ask_line(const char *prompt, char *out, size_t size, bool hidden)
+{
+	size_t n = strlen(out);
+	for (;;) {
+		char b[72], shown[40];
+		size_t k = n < sizeof shown - 1 ? n : sizeof shown - 1;
+		for (size_t i = 0; i < k; i++) shown[i] = hidden ? '*' : out[n - k + i];
+		shown[k] = 0;
+		snprintf(b, sizeof b, " %s%s_", prompt, shown);
+		screen_note(b, 600000);
+		screen_draw(&term, false);
+		keys_poll();
+		int c = keys_get();
+		if (c < 0) { sleep_ms(10); continue; }
+		c &= ~KF_ALT;
+		if (c == VK_ESC) { screen_note("", 1); return false; }
+		if (c == VK_ENTER) { screen_note("", 1); return true; }
+		if (c == VK_BS && n) out[--n] = 0;
+		else if (c >= 0x20 && c < 0x7f && n < size - 1) { out[n++] = (char)c; out[n] = 0; }
+	}
+}
+
+/* SSH to user@host: connect, check the host's key against the one trusted
+   before (or ask, the first time), then the password (three tries) */
+static bool ssh_connect(const char *target, const char *at, uint16_t port, char *why, size_t why_size)
+{
+	char user[33], host[HOST_LEN], fp[64], b[160];
+	snprintf(user, sizeof user, "%.*s", (int)(at - target), target);
+	snprintf(host, sizeof host, "%s", at + 1);
+	if (!link_ssh_connect(host, port, progress, NULL, fp, sizeof fp, why, why_size)) return false;
+	switch (hosts_key(host, port, fp)) {
+	case KEY_KNOWN:
+		break;
+	case KEY_CHANGED:
+		snprintf(b, sizeof b, "\r\n[%s's key has CHANGED since calcterm trusted it:\r\n %s\r\n"
+			 "Someone may be pretending to be it. If you know why it changed (the system\r\n"
+			 "was reinstalled, say), delete its line in " KNOWN_PATH ".]\r\n", host, fp);
+		local(b);
+		link_hangup();
+		snprintf(why, why_size, "Not connected: the host's key has changed");
+		return false;
+	default: {
+		snprintf(b, sizeof b, "\r\n[First time connecting to %s. Its key:\r\n %s]\r\n", host, fp);
+		local(b);
+		char yn[4] = "";
+		if (!ask_line("Trust this host? (y/n) ", yn, sizeof yn, false) || (yn[0] != 'y' && yn[0] != 'Y')) {
+			link_hangup();
+			snprintf(why, why_size, "Not connected.");
+			return false;
+		}
+		hosts_key_remember(host, port, fp);
+	}
+	}
+	for (int tries = 0; tries < 3; tries++) {
+		static char password[65];
+		password[0] = 0;
+		snprintf(b, sizeof b, "%s's password: ", user);
+		if (!ask_line(b, password, sizeof password, true)) {
+			link_hangup();
+			snprintf(why, why_size, "Not connected.");
+			return false;
+		}
+		bool wrong;
+		bool ok = link_ssh_login(user, password, progress, NULL, "calcterm", term.cols, VT_ROWS,
+					 &wrong, why, why_size);
+		memset(password, 0, sizeof password);
+		if (ok) return true;
+		if (!wrong) return false;
+		screen_note(" Wrong password.", 2000);
+	}
+	link_hangup();
+	snprintf(why, why_size, "Wrong password three times.");
+	return false;
 }
 
 static void key(int k)

@@ -1,6 +1,6 @@
 # calcterm
 
-A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). It talks over a serial line, or by telnet over Wi-Fi; SSH and SFTP are to follow.
+A VT100 terminal for the PicoCalc (RP2350, Pico 2 W). It talks over a serial line, or by telnet or SSH over Wi-Fi; SFTP is to follow.
 
 The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100's line-drawing characters added so boxes join up, or of 80 columns in calcterm's own 4×10 font. Alt+F1 switches between them.
 
@@ -27,7 +27,7 @@ The screen is 32 rows of 64 columns, in Blair Leduc's 5×10 font with the VT100'
 | Ctrl tapped on its own | makes the next key a Ctrl key (a `^` shows in the top-right corner) |
 | Brk | a quarter-second break on the line |
 | Alt+F1 | 64 or 80 columns (then, on a serial line, run `calcsize` on the host, below; telnet tells the host itself) |
-| Alt+F2 | telnet: the host list, to connect or hang up |
+| Alt+F2 | telnet and SSH: the host list, to connect or hang up |
 | Alt+F3 | the Bluetooth keyboard's state, as a line in the terminal (for troubleshooting) |
 | Alt+F4 | a screenshot, to `/screenshots` on the card (a .bmp, a .txt of the screen's text, and a .raw of the last 16 KB the host sent, for when something draws wrongly) |
 | **Alt+F5** | **the setup menu** |
@@ -58,9 +58,9 @@ To check the PicoCalc's half on its own, bridge pins 2 and 3 of the board's DB9 
 
 XON/XOFF is on by default: if the PicoCalc falls behind (it has a 16 KB buffer), it asks the host to pause.
 
-## Telnet (Pico 2 W)
+## Telnet and SSH (Pico 2 W)
 
-Alt+F2 opens a list of hosts. Pick one and calcterm joins the Wi-Fi network, connects, and the line is telnet until you hang up (Alt+F2 again) or the host does; then it's back on the serial port. Esc stops a connection that's taking too long.
+Alt+F2 opens a list of hosts. Pick one and calcterm joins the Wi-Fi network, connects, and the line is telnet or SSH until you hang up (Alt+F2 again) or the host does; then it's back on the serial port. Esc stops a connection that's taking too long.
 
 **The Wi-Fi network** is the one in `/ntp/ntp.cfg`, the file the PicoCalc shell's `NTP` command uses, so it's set up in one place. If you don't have it yet, write it with the shell's EDIT (or vi):
 
@@ -70,15 +70,20 @@ Alt+F2 opens a list of hosts. Pick one and calcterm joins the Wi-Fi network, con
 
 calcterm only reads it. (The shell's user guide has the details: quotes, comments, the `timeout` line.)
 
-**The host list** is `/calcterm/hosts`, a line for each host: a name, its address, and the port if it isn't 23. `#` starts a comment.
+**The host list** is `/calcterm/hosts`, a line for each host: a name, its address, and the port if it isn't the usual one. An address with a user name in front, as the `ssh` command takes it, is SSH (port 22 unless given); one without is telnet (port 23). `#` starts a comment.
 
-    # name     address          port
+    # name     address              port
     mini       192.168.1.50
-    bbs        bbs.example.org  2323
+    mini-ssh   chris@192.168.1.50
+    bbs        bbs.example.org      2323
 
-Or choose *Type an address...* in the list: `192.168.1.50`, or `bbs.example.org:2323`. One that connects is added to the file for next time. Names are looked up by DNS; names ending in `.local` aren't, so use the address for those.
+Or choose *Type an address...* in the list: `192.168.1.50`, `chris@192.168.1.50`, or `bbs.example.org:2323`. One that connects is added to the file for next time. Names are looked up by DNS; names ending in `.local` aren't, so use the address for those.
 
-**What telnet tells the host:** the terminal type (`calcterm`, so install the terminfo entry below on the host), and the screen's size, again whenever Alt+F1 changes it, so `calcsize` isn't needed over telnet. The host echoes what you type; one that says it won't gets calcterm's own echo. ZMODEM works over telnet just as over serial.
+**SSH** encrypts everything, password included. The first time calcterm connects to a host it shows the host's key (its fingerprint, `SHA256:...`, as OpenSSH shows it) and asks whether to trust it; a trusted key goes in `/calcterm/known_hosts`. After that the key is checked each time, and if it has changed calcterm says so and doesn't connect: either the host was reinstalled (then delete its line in `known_hosts`), or something is pretending to be it. On the host, `ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub` shows the key to compare with. Then calcterm asks for the password (three tries). Logging in takes well under a second on a home network. calcterm logs in with a password; keys are to follow.
+
+To give an Ubuntu machine an SSH server: `sudo apt install -y openssh-server && sudo systemctl enable --now ssh`.
+
+**What telnet and SSH tell the host:** the terminal type (`calcterm`, so install the terminfo entry below on the host), and the screen's size, again whenever Alt+F1 changes it, so `calcsize` isn't needed over the network. The host echoes what you type; one that says it won't gets calcterm's own echo. ZMODEM works over telnet just as over serial (over SSH: to be tried).
 
 **A telnet server on Ubuntu:**
 
@@ -92,7 +97,7 @@ That installs a small inetd that answers on port 23 and starts a login for each 
 
 `sudo ss -ltnp | grep ':23 '` shows whether it's answering. If Ubuntu's firewall is on (`sudo ufw status`), allow telnet from your own network only: `sudo ufw allow from 192.168.0.0/16 to any port 23`. Log in as yourself (Ubuntu doesn't allow root over telnet).
 
-Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. SSH, which encrypts, is planned.
+Telnet sends everything as it is, password included, so keep it to your own network: don't forward port 23 on your router. Use SSH for anything beyond it.
 
 ## A Bluetooth keyboard (Pico 2 W)
 
@@ -221,7 +226,8 @@ Copy `calcterm.uf2` to the card's `pico2-apps` folder and start it from UF2 Load
 - [picocalc-text-starter](https://github.com/BlairLeduc/picocalc-text-starter) (Blair Leduc): the LCD, keyboard and SD card drivers, and the font.
 - [picocalc-shell](https://github.com/BlairLeduc/picocalc-shell) (Blair Leduc): returning to the shell, and reading `/ntp/ntp.cfg` for Wi-Fi.
 - [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras)' btkbd: the Bluetooth keyboard.
-- The Pico SDK's CYW43 driver, lwIP and BTstack: Wi-Fi and TCP for telnet, and Bluetooth.
+- [libssh2](https://libssh2.org) 1.11.1, with the Pico SDK's Mbed TLS, through picocalc-extras' ssh/: SSH.
+- The Pico SDK's CYW43 driver, lwIP and BTstack: Wi-Fi and TCP, and Bluetooth.
 - [picocalc-extras](https://github.com/ctorkildson-netizen/picocalc-extras): building FatFs for the card.
 
 These are git submodules pinned to release tags; Dependabot proposes new releases as pull requests.

@@ -1,11 +1,17 @@
-/* hosts.c -- the telnet host list (Alt+F2): see hosts.h.
+/* hosts.c -- the host list (Alt+F2): see hosts.h.
  *
  * /calcterm/hosts has a line for each host: a name, its address, and the
- * port if it isn't telnet's 23; # starts a comment.
+ * port if it isn't the usual one; # starts a comment. An address with a
+ * user name in front (as the ssh command takes it) is SSH, on port 22
+ * unless a port is given; one without is telnet, on 23.
  *
- *     # name     address          port
+ *     # name     address              port
  *     mini       192.168.1.50
- *     bbs        bbs.example.org  2323
+ *     mini-ssh   chris@192.168.1.50
+ *     bbs        bbs.example.org      2323
+ *
+ * SSH hosts' keys are remembered in /calcterm/known_hosts, a line each:
+ * address, port, and the key's fingerprint.
  *
  * The list shows them, then "Type an address..." for one that isn't on it
  * (one that works is added), and "Hang up" when connected.
@@ -49,7 +55,7 @@ static void load(void)
 		if (!k) continue;
 		/* one word: the address is its name too */
 		const char *addr = k > 1 ? w[1] : w[0];
-		long port = k > 2 ? atol(w[2]) : 23;
+		long port = k > 2 ? atol(w[2]) : strchr(addr, '@') ? 22 : 23;
 		if (port < 1 || port > 65535) continue;
 		snprintf(list[n_hosts].name, sizeof list[0].name, "%.23s", w[0]);
 		snprintf(list[n_hosts].host, HOST_LEN, "%.63s", addr);
@@ -69,7 +75,7 @@ static void draw(int sel, int top, int items, bool connected)
 {
 	char b[65];
 	screen_fill(0, 0, 64, 32, BG);
-	screen_text(1, 0, "Connect by telnet", 11, BG);
+	screen_text(1, 0, "Connect by telnet or SSH", 11, BG);
 	screen_text(1, 1, "Wi-Fi from /ntp/ntp.cfg   the list: " HOSTS_PATH, 7, BG);
 	snprintf(b, sizeof b, " %-16s %-36s %6s", "Name", "Address", "Port");
 	screen_text(1, LIST_TOP - 1, b, 11, BG);
@@ -107,7 +113,7 @@ static bool ask(const char *prompt, char *out, size_t size)
 /* "host", "host:port" or "host port" */
 static bool parse(char *s, char *host, uint16_t *port)
 {
-	*port = 23;
+	*port = strchr(s, '@') ? 22 : 23;
 	char *sep = strpbrk(s, ": ");
 	if (sep) {
 		long p = atol(sep + 1);
@@ -148,7 +154,7 @@ int hosts_pick(bool connected, char *host, uint16_t *port, char *name)
 		static char typed[HOST_LEN + 8];
 		typed[0] = typing ? (char)k : 0;
 		typed[1] = 0;
-		if (!ask("Address (:port if not 23): ", typed, sizeof typed)) continue;
+		if (!ask("Address (user@address for SSH; :port): ", typed, sizeof typed)) continue;
 		char copy[sizeof typed];
 		strcpy(copy, typed);
 		if (!parse(copy, host, port)) continue;
@@ -168,9 +174,48 @@ void hosts_remember(const char *host, uint16_t port)
 	if (f_open(&f, HOSTS_PATH, FA_WRITE | FA_OPEN_APPEND) != FR_OK) return;
 	char b[160];
 	int n = 0;
-	if (fresh) n = snprintf(b, sizeof b, "# calcterm's telnet hosts: name, address, port (if not 23)\n");
-	if (port == 23) n += snprintf(b + n, sizeof b - (size_t)n, "%-16s %s\n", host, host);
+	if (fresh) n = snprintf(b, sizeof b, "# calcterm's hosts: name, address (user@address for SSH), port (if not 23, or 22 for SSH)\n");
+	if (port == (strchr(host, '@') ? 22 : 23)) n += snprintf(b + n, sizeof b - (size_t)n, "%-16s %s\n", host, host);
 	else n += snprintf(b + n, sizeof b - (size_t)n, "%-16s %s %u\n", host, host, port);
+	UINT put;
+	f_write(&f, b, (UINT)n, &put);
+	f_close(&f);
+}
+
+/* ---- SSH hosts' keys */
+
+int hosts_key(const char *host, uint16_t port, const char *fp)
+{
+	FIL f;
+	if (f_open(&f, KNOWN_PATH, FA_READ) != FR_OK) return KEY_NEW;
+	static char text[4096];
+	UINT got = 0;
+	f_read(&f, text, sizeof text - 1, &got);
+	f_close(&f);
+	text[got] = 0;
+	int found = KEY_NEW;
+	char *save;
+	for (char *line = strtok_r(text, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
+		char h[HOST_LEN], k[64];
+		unsigned p;
+		if (line[0] == '#' || sscanf(line, "%63s %u %63s", h, &p, k) != 3) continue;
+		if (strcasecmp(h, host) || p != port) continue;
+		if (!strcmp(k, fp)) return KEY_KNOWN;
+		found = KEY_CHANGED;
+	}
+	return found;
+}
+
+void hosts_key_remember(const char *host, uint16_t port, const char *fp)
+{
+	FIL f;
+	f_mkdir(CFG_DIR);
+	bool fresh = f_stat(KNOWN_PATH, NULL) != FR_OK;
+	if (f_open(&f, KNOWN_PATH, FA_WRITE | FA_OPEN_APPEND) != FR_OK) return;
+	char b[200];
+	int n = 0;
+	if (fresh) n = snprintf(b, sizeof b, "# SSH hosts calcterm has trusted: address, port, the key's fingerprint\n");
+	n += snprintf(b + n, sizeof b - (size_t)n, "%s %u %s\n", host, port, fp);
 	UINT put;
 	f_write(&f, b, (UINT)n, &put);
 	f_close(&f);

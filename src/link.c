@@ -1,4 +1,5 @@
-/* link.c -- the line: the serial port, or telnet (net.c, telnet.c).
+/* link.c -- the line: the serial port, telnet (net/, telnet.c) or SSH
+ * (picocalc-extras' ssh/: libssh2 over a net/ connection).
  *
  * What comes in is caught by the UART's interrupt into a 16 KB ring, so
  * nothing is lost while the screen is being drawn; with XON/XOFF on, the
@@ -13,8 +14,14 @@
 #include "link.h"
 #include "net.h"
 #include "telnet.h"
+#include "sshnet.h"
 
-static bool tel;			/* the line is telnet */
+static bool tel;			/* the line is telnet (or SSH) */
+static bool sec;			/* ...SSH: */
+static net_conn *sconn;
+static LIBSSH2_SESSION *ss;
+static LIBSSH2_CHANNEL *sch;
+static bool s_eof;
 static telnet tn;
 
 #define RING 16384			/* a power of two */
@@ -136,22 +143,134 @@ bool link_telnet(const char *host, uint16_t port, bool (*progress)(const char *,
 
 void link_hangup(void)
 {
-	if (tel) net_close();
+	if (sec) {
+		/* a polite goodbye if it goes quickly (each step may say "again"
+		   for a while, non-blocking); gone either way */
+		absolute_time_t until = make_timeout_time_ms(1000);
+#define QUICKLY(expr) while ((expr) == LIBSSH2_ERROR_EAGAIN && !time_reached(until)) sleep_ms(1)
+		if (sch) { QUICKLY(libssh2_channel_close(sch)); QUICKLY(libssh2_channel_free(sch)); }
+		if (ss) {
+			QUICKLY(libssh2_session_disconnect(ss, "bye"));
+			libssh2_session_set_blocking(ss, 1);	/* so free doesn't stop half-way */
+			libssh2_session_set_timeout(ss, 500);
+			libssh2_session_free(ss);
+		}
+#undef QUICKLY
+		if (sconn) net_conn_close(sconn);
+		sch = NULL; ss = NULL; sconn = NULL;
+		sec = false;
+	} else if (tel) net_close();
 	tel = false;
 }
 
+/* ------------------------------------------------------------ SSH */
+
+/* a libssh2 call, again until it's done, with Esc (progress) to stop it */
+#define SSH_WAIT(expr, what) ({ int _r; absolute_time_t _t = make_timeout_time_ms(150); \
+	while ((_r = (expr)) == LIBSSH2_ERROR_EAGAIN) { \
+		if (time_reached(_t)) { _t = make_timeout_time_ms(150); if (progress && !progress(what, ctx)) { _r = -999; break; } } \
+		sleep_ms(1); } _r; })
+
+static void ssh_why(int r, char *why, size_t why_size)
+{
+	if (r == -999) snprintf(why, why_size, "Stopped.");
+	else snprintf(why, why_size, "SSH: %s", ssh_error(ss));
+}
+
+bool link_ssh_connect(const char *host, uint16_t port, bool (*progress)(const char *, void *), void *ctx,
+		      char *fp, size_t fp_size, char *why, size_t why_size)
+{
+	link_hangup();
+	sconn = net_dial(host, port, progress, ctx, why, why_size);
+	if (!sconn) return false;
+	ss = ssh_session(sconn);
+	if (!ss) { snprintf(why, why_size, "Not enough memory for SSH"); link_hangup(); return false; }
+	sec = tel = true;
+	s_eof = false;
+	int r = SSH_WAIT(libssh2_session_handshake(ss, 0), "Agreeing on encryption...");
+	if (r) { ssh_why(r, why, why_size); link_hangup(); return false; }
+	/* the fingerprint as OpenSSH writes it: base64 without the padding */
+	const unsigned char *h = (const unsigned char *)libssh2_hostkey_hash(ss, LIBSSH2_HOSTKEY_HASH_SHA256);
+	static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	size_t n = (size_t)snprintf(fp, fp_size, "SHA256:");
+	for (int i = 0; h && i < 32 && n + 4 < fp_size; i += 3) {
+		uint32_t v = (uint32_t)h[i] << 16 | (i + 1 < 32 ? (uint32_t)h[i + 1] << 8 : 0) | (i + 2 < 32 ? h[i + 2] : 0);
+		int chars = i + 2 < 32 ? 4 : i + 1 < 32 ? 3 : 2;
+		for (int k = 0; k < chars; k++) fp[n++] = b64[(v >> (18 - 6 * k)) & 63];
+	}
+	fp[n] = 0;
+	return true;
+}
+
+bool link_ssh_login(const char *user, const char *password, bool (*progress)(const char *, void *), void *ctx,
+		    const char *term, int cols, int rows, bool *wrong, char *why, size_t why_size)
+{
+	*wrong = false;
+	if (!sec || !ss) { snprintf(why, why_size, "Not connected"); return false; }
+	int r = SSH_WAIT(libssh2_userauth_password(ss, user, password), "Logging in...");
+	if (r == LIBSSH2_ERROR_AUTHENTICATION_FAILED || r == LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED) {
+		*wrong = true;
+		snprintf(why, why_size, "Wrong user name or password");
+		return false;			/* (still connected: try again) */
+	}
+	if (r) { ssh_why(r, why, why_size); link_hangup(); return false; }
+	absolute_time_t t = make_timeout_time_ms(10000);
+	while (!(sch = libssh2_channel_open_session(ss)) && libssh2_session_last_errno(ss) == LIBSSH2_ERROR_EAGAIN
+	       && !time_reached(t))
+		sleep_ms(1);
+	if (!sch) { snprintf(why, why_size, "SSH: no session (%s)", ssh_error(ss)); link_hangup(); return false; }
+	r = SSH_WAIT(libssh2_channel_request_pty_ex(sch, term, (unsigned)strlen(term), NULL, 0, cols, rows, 0, 0),
+		     "Asking for a terminal...");
+	if (!r) r = SSH_WAIT(libssh2_channel_shell(sch), "Starting the shell...");
+	if (r) { ssh_why(r, why, why_size); link_hangup(); return false; }
+	return true;
+}
+
+bool link_is_ssh(void) { return sec; }
+
+/* what's typed, to the host: libssh2 may take part of it now, the rest a
+   moment later */
+static void ssh_write(const uint8_t *s, size_t n)
+{
+	absolute_time_t until = make_timeout_time_ms(5000);
+	while (n && sch && !time_reached(until)) {
+		ssize_t w = libssh2_channel_write(sch, (const char *)s, n);
+		if (w == LIBSSH2_ERROR_EAGAIN) { sleep_ms(1); continue; }
+		if (w < 0) { s_eof = true; return; }
+		s += w;
+		n -= (size_t)w;
+	}
+}
+
+static size_t ssh_read(uint8_t *buf, size_t max)
+{
+	if (!sch) return 0;
+	ssize_t r = libssh2_channel_read(sch, (char *)buf, max);
+	if (r > 0) return (size_t)r;
+	if ((r < 0 && r != LIBSSH2_ERROR_EAGAIN) || libssh2_channel_eof(sch)) s_eof = true;
+	return 0;
+}
+
+/* ------------------------------------------------------------ either */
+
 bool link_is_telnet(void) { return tel; }
-bool link_dropped(void) { return tel && !net_open(); }
-void link_size(int cols, int rows) { if (tel) telnet_size(&tn, cols, rows); }
-bool link_host_echoes(void) { return tel && telnet_host_echoes(&tn); }
+bool link_dropped(void) { return sec ? s_eof || !net_conn_open(sconn) : tel && !net_open(); }
+void link_size(int cols, int rows)
+{
+	if (sec) { if (sch) libssh2_channel_request_pty_size(sch, cols, rows); }
+	else if (tel) telnet_size(&tn, cols, rows);
+}
+bool link_host_echoes(void) { return sec || (tel && telnet_host_echoes(&tn)); }
 
 size_t link_waiting(void)
 {
+	if (sec) return sconn ? net_conn_waiting(sconn) : 0;
 	return tel ? net_waiting() : ser_waiting();
 }
 
 size_t link_read(uint8_t *buf, size_t max)
 {
+	if (sec) return ssh_read(buf, max);
 	if (!tel) return ser_read(buf, max);
 	/* telnet's commands come out, so what's left may be nothing: read on
 	   until there's data or nothing more */
@@ -166,13 +285,15 @@ size_t link_read(uint8_t *buf, size_t max)
 
 void link_write(const uint8_t *s, size_t n)
 {
-	if (tel) telnet_out(&tn, s, n);
+	if (sec) ssh_write(s, n);
+	else if (tel) telnet_out(&tn, s, n);
 	else ser_write(s, n);
 }
 
 void link_break(void)
 {
-	if (tel) telnet_break(&tn);
+	if (sec) { if (sch) libssh2_channel_process_startup(sch, "break", 5, NULL, 0); }	/* (best effort) */
+	else if (tel) telnet_break(&tn);
 	else ser_break();
 }
 

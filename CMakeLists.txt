@@ -21,6 +21,9 @@ include(${MODULES}/picocalc-extras/bluetooth/bluetooth.cmake)
 # reads /ntp/ntp.cfg with the shell's own parser
 include(${MODULES}/picocalc-extras/net/net.cmake)
 picocalc_net(${MODULES}/picocalc-shell)
+# SSH: libssh2 (a submodule, at its 1.11.1 tag) with the SDK's Mbed TLS
+include(${MODULES}/picocalc-extras/ssh/ssh.cmake)
+picocalc_ssh(${MODULES}/libssh2)
 
 add_executable(calcterm
     src/main.c src/vt.c src/screen.c src/keys.c src/link.c src/menu.c
@@ -35,7 +38,7 @@ target_include_directories(calcterm PRIVATE
     ${MODULES}/picocalc-shell/include
     ${MODULES}/picocalc-shell/src/core)
 pico_set_program_name(calcterm "calcterm")
-pico_set_program_version(calcterm "0.5")
+pico_set_program_version(calcterm "0.6")
 # which build this is, on the sign-on line and in the menu: the commit, and
 # its date (so two builds of the same version can be told apart on the PicoCalc)
 execute_process(COMMAND git log -1 --format=%h%x20%cs WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
@@ -47,7 +50,7 @@ target_compile_definitions(calcterm PRIVATE CALCTERM_BUILD="${CALCTERM_BUILD}")
 # the Pico's UART0 is the terminal's line, so nothing else may print to it
 pico_enable_stdio_uart(calcterm 0)
 pico_enable_stdio_usb(calcterm 0)
-target_link_libraries(calcterm picocalc_fs picocalc_net
+target_link_libraries(calcterm picocalc_fs picocalc_net picocalc_ssh
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_uart
     hardware_watchdog hardware_powman
     picocalc_btkbd)				# a Bluetooth keyboard
