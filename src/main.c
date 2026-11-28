@@ -101,7 +101,7 @@ static void keyboard_news(void)
 
 static void sign_on(bool loaded)
 {
-	char b[160];
+	char b[256];
 	static const char *const fmt[] = { "N", "O", "E" };
 	snprintf(b, sizeof b,
 		 "\x1b[1mcalcterm " PICO_PROGRAM_VERSION_STRING "\x1b[0m -- a VT100 terminal (" CALCTERM_BUILD ")\r\n"
